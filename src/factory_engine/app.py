@@ -63,16 +63,40 @@ class GameApp:
             size=64,
             usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST
         )
+
+        self.light_buffer = self.device.create_buffer(
+            size=16,
+            usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST
+        )
+
+        # Upload light data
+        light_direction = Vec3(-1.0, 2.0, -1.0).normalize()
+        self.device.queue.write_buffer(
+            self.light_buffer,
+            0,
+            struct.pack(
+                "4f",
+                light_direction.x,
+                light_direction.y,
+                light_direction.z,
+                0.0,
+            )
+        )
         
         vertex_buffers = [
             {
-                "array_stride": 12,
+                "array_stride": 24,
                 "step_mode": "vertex",
                 "attributes": [
                     {
                         "format": "float32x3",
                         "offset": 0,
                         "shader_location": 0
+                    },
+                    {
+                        "format": "float32x3",
+                        "offset": 12,
+                        "shader_location": 1
                     }
                 ]
             }
@@ -92,6 +116,13 @@ class GameApp:
                 {
                     "binding": 1,
                     "visibility": wgpu.ShaderStage.VERTEX,
+                    "buffer": {
+                        "type": wgpu.BufferBindingType.uniform
+                    }
+                },
+                {
+                    "binding": 2,
+                    "visibility": wgpu.ShaderStage.FRAGMENT,
                     "buffer": {
                         "type": wgpu.BufferBindingType.uniform
                     }
@@ -142,6 +173,12 @@ class GameApp:
                     "binding": 1,
                     "resource": {
                         "buffer": self.model_buffer
+                    }
+                },
+                {
+                    "binding": 2,
+                    "resource": {
+                        "buffer": self.light_buffer
                     }
                 }
             ]
