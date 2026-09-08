@@ -24,11 +24,22 @@ class Vec3:
         )
     
     def __mul__(self, other):
-        return Vec3(
-            self.x * other.x,
-            self.y * other.y,
-            self.z * other.z
-        )
+        if isinstance(other, Vec3):
+            return Vec3(
+                self.x * other.x,
+                self.y * other.y,
+                self.z * other.z
+            )
+        elif isinstance(other, (int, float)):
+            return Vec3(
+                self.x * other,
+                self.y * other,
+                self.z * other
+            )
+        return NotImplemented
+
+    def __rmul__(self, other):
+        return self * other        
 
     def length(self):
         return math.sqrt(
@@ -98,6 +109,19 @@ class Mat4:
         ])
 
     @staticmethod
+    def rotation_x(angle):
+        c = math.cos(angle)
+        s = math.sin(angle)
+
+        return Mat4([
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, c,   -s,  0.0],
+            [0.0, s,   c,   0.0],
+            [0.0, 0.0, 0.0, 1.0]                
+        ])
+
+
+    @staticmethod
     def rotation_y(angle):
         c = math.cos(angle)
         s = math.sin(angle)
@@ -106,6 +130,18 @@ class Mat4:
             [c,   0.0, s,   0.0],
             [0.0, 1.0, 0.0, 0.0],
             [-s,  0.0, c,   0.0],
+            [0.0, 0.0, 0.0, 1.0]                
+        ])
+
+    @staticmethod
+    def rotation_z(angle):
+        c = math.cos(angle)
+        s = math.sin(angle)
+
+        return Mat4([
+            [c,   -s,  0.0, 0.0],
+            [s,   c,   0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
             [0.0, 0.0, 0.0, 1.0]                
         ])
 
