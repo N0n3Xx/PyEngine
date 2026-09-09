@@ -1,9 +1,19 @@
 # chunk.py
+from factory_engine.terrain.terrain import Terrain
+
 
 class Chunk:
-	def __init__(self, chunk_x, chunk_y, lod=0):
-		self.chunk_x = chunk_x
-		self.chunk_y = chunk_y
+	def __init__(self, terrain: Terrain, position, lod=0):
+		self.terrain = terrain
+		self.position = position
 		self.lod = lod
 
 		self.neighbors = {}
+
+	def generate(self):
+		x = self.position.x
+		z = self.position.z
+
+		height = self.terrain.generate_height(x, z)
+
+		return height
