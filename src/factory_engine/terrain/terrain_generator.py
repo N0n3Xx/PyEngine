@@ -29,3 +29,17 @@ class ContinentalityGenerator:
 
 	def generate(self, x, y):
 		return self.noise.noise_2d(x, y)
+
+class GeologyGenerator:
+	def __init__(self, seed):
+		self.seed = seed
+
+		self.noise = NoiseGenerator(
+			seed=seed,
+			scale=0.003,
+			octaves=4,
+			persistence=0.5,
+			lacunarity=2.0,
+		)
+	def generate(self, x, y):
+		return self.noise.noise_2d(x, y)
