@@ -57,14 +57,23 @@ fn fs_main(
 
     // Checking for the front face
     if (all(input.normal == vec3f(0.0, 0.0, 1.0))) {
-        let gradient = sin(input.local_position.x * 10.0);
+        let x = abs(input.local_position.x);
+        let y = abs(input.local_position.y);
+        
+        let distance = max(x, y);
 
-        return vec4f(
-            gradient,
-            0.0,
-            1.0 - gradient,
-            1.0
-        );
+        let inner = smoothstep(0.2, 0.25, distance);
+        let outer = smoothstep(0.3, 0.35, distance);
+        let glow_mask = inner - outer;
+        let circle_mask = 1.0 - smoothstep(0.2, 0.3, length(input.local_position.xy));
+        
+        let purple = vec3f(0.6, 0.0, 1.0);
+        let white = vec3f(1.0, 1.0, 1.0);
+        
+        let glow_color = purple * glow_mask;
+
+        let _final_color = base_color + glow_color + (white * circle_mask * glow_mask);
+        return vec4f(_final_color, 1.0);
     }
     
     let color = base_color * brightness;
