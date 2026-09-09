@@ -1,8 +1,9 @@
 # entity.py
 
 class Entity:
-	def __init__(self, entity_id, world):
+	def __init__(self, entity_id, name, world):
 		self.id = entity_id
+		self.name = name
 		self.world = world
 
 		self.components = {}

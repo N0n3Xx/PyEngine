@@ -1,15 +1,12 @@
 struct VertexOutput {
     @builtin(position) position: vec4f,
     @location(0) local_position: vec3f,
-    @location(1) normal: vec3f
+    @location(1) normal: vec3f,
+    @location(2) local_normal: vec3f
 };
 
 struct Camera {
     view_projection: mat4x4f
-};
-
-struct Model {
-    model_matrix: mat4x4f
 };
 
 struct Light {
@@ -20,23 +17,35 @@ struct Light {
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 
-@group(0) @binding(1)
-var<uniform> model: Model;
-
 @group(0) @binding(2)
 var<uniform> light: Light;
 
 @vertex
-fn vs_main(@location(0) vertex_position: vec3f, @location(1) vertex_normal: vec3f) -> VertexOutput {
+fn vs_main(
+    @location(0) vertex_position: vec3f,
+    @location(1) vertex_normal: vec3f,
+
+    @location(2) model_0: vec4f,
+	@location(3) model_1: vec4f,
+	@location(4) model_2: vec4f,
+	@location(5) model_3: vec4f
+) -> VertexOutput {
     var output: VertexOutput;
-    let world_position = model.model_matrix * vec4f(vertex_position, 1.0);
+    let model_matrix = mat4x4<f32>(
+        model_0,
+        model_1,
+        model_2,
+        model_3
+    );
+    let world_position = model_matrix * vec4f(vertex_position, 1.0);
 
     output.position =
         camera.view_projection
         * world_position;
     output.local_position = vertex_position;
-    output.normal = (model.model_matrix * vec4f(vertex_normal, 0.0)).xyz;
-    
+    output.normal = (model_matrix * vec4f(vertex_normal, 0.0)).xyz;
+    output.local_normal = vertex_normal;
+
     return output;
 }
 
@@ -56,7 +65,7 @@ fn fs_main(
     let brightness = min(ambient + diffuse, 1.0);
 
     // Checking for the front face
-    if (all(input.normal == vec3f(0.0, 0.0, 1.0))) {
+    if (all(input.local_normal == vec3f(0.0, 0.0, 1.0))) {
         let x = abs(input.local_position.x);
         let y = abs(input.local_position.y);
         

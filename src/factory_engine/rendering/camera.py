@@ -2,7 +2,7 @@
 
 import math
 
-from .math3d import Vec3, Mat4
+from factory_engine.math3d import Vec3, Mat4
 
 class Camera:
     def __init__(self):
