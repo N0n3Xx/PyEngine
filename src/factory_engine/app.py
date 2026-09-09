@@ -224,11 +224,11 @@ class GameApp:
             self.camera.projection_matrix(aspect_ratio) @ self.camera.view_matrix()
         )
 
-        matrix = view_projection.to_column_major_floats()
+        model_matrix = view_projection.to_column_major_floats()
 
         data = struct.pack(
             "16f",
-            *matrix
+            *model_matrix
         )
 
         self.device.queue.write_buffer(

@@ -9,7 +9,7 @@ struct Camera {
 };
 
 struct Model {
-    matrix: mat4x4f
+    model_matrix: mat4x4f
 };
 
 struct Light {
@@ -29,13 +29,13 @@ var<uniform> light: Light;
 @vertex
 fn vs_main(@location(0) vertex_position: vec3f, @location(1) vertex_normal: vec3f) -> VertexOutput {
     var output: VertexOutput;
-    let world_position = model.matrix * vec4f(vertex_position, 1.0);
+    let world_position = model.model_matrix * vec4f(vertex_position, 1.0);
 
     output.position =
         camera.view_projection
         * world_position;
     output.local_position = vertex_position;
-    output.normal = (model.matrix * vec4f(vertex_normal, 0.0)).xyz;
+    output.normal = (model.model_matrix * vec4f(vertex_normal, 0.0)).xyz;
     
     return output;
 }
