@@ -39,3 +39,9 @@ class World:
 				)
 
 		return results
+
+	def get_entity_by_id(self, entity_id):
+		return self.entities.get(entity_id)
+
+	def get_entity_by_name(self, entity_name):
+		return self.entities.get(entity_name)

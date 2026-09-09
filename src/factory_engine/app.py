@@ -36,6 +36,10 @@ class GameApp:
 		self.input = InputHandler()
 		self.pipeline_cache = {}
 
+		self.render_batches = {}
+		self.entity_render_batches = {}
+		self.render_batches_built = False
+
 		# 60Hz update frequency
 		self.FIXED_DT = 1.0 / 60.0
 		self.MAX_UPDATES_PER_FRAME = 5
@@ -51,9 +55,9 @@ class GameApp:
 		self.fps_frame_count = 0
 
 		self.draw_calls = 0
+		self.batch_count = 0
 		self.rendered_instances = 0
-
-		self.interpolation_alpha = 0.0
+		self.rendered_triangles = 0
 
 		# TODO: Proper input mapping system and movement abstraction
 		self.camera_speed = 5.0  # Movement speed
@@ -147,17 +151,13 @@ class GameApp:
 		# ADD GAMEOBJECTS HERE
 		cube_mesh = Mesh.create_cube(self.device)
 
-		self.cube = self.world.create_entity("Cube")
-		self.cube.add(TransformComponent(position=Vec3(0.0, 0.0, 0.0)))
-		self.cube.add(MaterialComponent(shader=Path(__file__).parent / "shaders" / "mesh.wgsl"))
-		self.cube.add(MeshRenderer(cube_mesh))
-
-		cube2 = self.world.create_entity("Cube2")
-		cube2.add(TransformComponent(position=Vec3(1.0, 1.0, 0.0)))
-		cube2.add(MaterialComponent(shader=Path(__file__).parent / "shaders" / "mesh.wgsl"))
-		cube2.add(MeshRenderer(cube_mesh))
-
-		self.cube1angle = 0
+		for x in range(10):
+			for y in range(10):
+				for z in range(10):
+					cube = self.world.create_entity(f"Cube_{x}")
+					cube.add(TransformComponent(position=Vec3(1.0 * x, 1.0 * y, 1.0 * z)))
+					cube.add(MaterialComponent(shader=Path(__file__).parent / "shaders" / "mesh.wgsl"))
+					cube.add(MeshRenderer(cube_mesh))
 
 	def update(self) -> None:
 		"""Update game state EVERY FRAME"""
@@ -172,21 +172,17 @@ class GameApp:
 		updates = 0
 
 		while self.accumulator >= self.FIXED_DT and updates < self.MAX_UPDATES_PER_FRAME:
-			self.save_previous_state()
-
 			self.fixed_update(self.FIXED_DT)
 
 			self.tps_update_count += 1
 			self.accumulator -= self.FIXED_DT
 			updates += 1
 
-		self.interpolation_alpha = self.accumulator / self.FIXED_DT
-
 		# update camera and movement
 		self.update_camera_movement(frame_time)
 		self.update_camera()
 
-		# TPS, FPS and Batch stats printing
+		# Statistic Printing
 		self.fps_timer += frame_time
 		self.fps_frame_count += 1
 
@@ -200,7 +196,9 @@ class GameApp:
 				f"FPS: {self.fps:.1f} | "
 				f"TPS: {self.tps:.1f} | "
 				f"Draw Calls: {self.draw_calls} | "
-				f"Instances: {self.rendered_instances}"
+				f"Batches: {self.batch_count} | "
+				f"Instances: {self.rendered_instances} | "
+				f"Triangles: {self.rendered_triangles}"
 			)
 
 			self.fps_timer = 0.0
@@ -211,14 +209,15 @@ class GameApp:
 
 	def fixed_update(self, delta_time: float) -> None:
 		"""Update at CONFIGURED FREQUENCY (Default: 60Hz)"""
-		self.cube1angle += 0.3 * delta_time
-		self.cube.get(TransformComponent).set_rotation(Vec3(0.0, self.cube1angle, 0.0))
-
+		cube = self.world.get_entity_by_id(0)
+		cube.get(TransformComponent).set_rotation(Vec3(0.0, self.simulation_time, 0.0))
 		self.simulation_time += delta_time
 
 	def render(self) -> None:
 		self.draw_calls = 0
+		self.batch_count = 0
 		self.rendered_instances = 0
+		self.rendered_triangles = 0
 
 		# Generate Depth Texture
 		width, height = self.canvas.get_physical_size()
@@ -228,6 +227,8 @@ class GameApp:
 
 		if (width, height) != self.depth_size:
 			self.create_depth_texture(width, height)
+
+		self.build_render_batches()
 
 		encoder = self.device.create_command_encoder()
 		texture_view = self.context.get_current_texture().create_view()
@@ -259,14 +260,27 @@ class GameApp:
 		self.device.queue.submit([encoder.finish()])
 
 	def render_world(self, render_pass):
-		batches = self.build_render_batches()
+		batches = self.render_batches
+
+		self.batch_count = len(batches)
+
+		# Make sure all batch GPU buffers exist before
+		# processing individual dirty instances.
+		for batch in batches.values():
+			if batch.dirty:
+				self.upload_instance_buffer(batch)
+				batch.dirty = False
+
+		self.update_dirty_entities()
 
 		for batch in batches.values():
 			pipeline = self.get_pipeline(batch.material.shader)
 
 			render_pass.set_pipeline(pipeline)
 
-			self.upload_instance_buffer(batch)
+			if batch.dirty:
+				self.upload_instance_buffer(batch)
+				batch.dirty = False
 
 			gpu_mesh = batch.mesh
 
@@ -285,13 +299,16 @@ class GameApp:
 				"uint16"
 			)
 
+			instance_count = len(batch.instances)
+
 			render_pass.draw_indexed(
 				gpu_mesh.index_count,
-				len(batch.instances)
+				instance_count
 			)
 
 			self.draw_calls += 1
-			self.rendered_instances += len(batch.instances)
+			self.rendered_instances += instance_count
+			self.rendered_triangles += (gpu_mesh.index_count // 3) * instance_count
 
 	def draw_frame(self) -> None:
 		self.update()
@@ -359,73 +376,36 @@ class GameApp:
 		)
 
 	def build_render_batches(self):
-		batches = {}
+		if self.render_batches_built:
+			return self.render_batches
 
 		for entity, transform, mesh_renderer, material in self.world.query(
 				TransformComponent,
 				MeshRenderer,
 				MaterialComponent,
 		):
-			mesh = mesh_renderer.mesh
-			key = (mesh, material.shader)
+			# if not self.is_entity_visible(transform):
+			#	continue
+			key = (mesh_renderer.mesh, material.shader)
 
-			if key not in batches:
-				batches[key] = RenderBatch(
-					mesh,
+			batch = self.render_batches.get(key)
+
+			if batch is None:
+				batch = RenderBatch(
+					mesh_renderer.mesh,
 					material
 				)
 
-			render_position = Vec3(
+				self.render_batches[key] = batch
 
-				transform.previous_position.x
-				+ (transform.position.x - transform.previous_position.x)
-				* self.interpolation_alpha,
-				transform.previous_position.y
-				+ (transform.position.y - transform.previous_position.y)
-				* self.interpolation_alpha,
-				transform.previous_position.z
-				+ (transform.position.z - transform.previous_position.z)
-				* self.interpolation_alpha,
-			)
-			render_rotation = Vec3(
-				transform.previous_rotation.x
-				+ (transform.rotation.x - transform.previous_rotation.x)
-				* self.interpolation_alpha,
-				transform.previous_rotation.y
-				+ (transform.rotation.y - transform.previous_rotation.y)
-				* self.interpolation_alpha,
-				transform.previous_rotation.z
-				+ (transform.rotation.z - transform.previous_rotation.z)
-				* self.interpolation_alpha,
-			)
-			render_scale = Vec3(
-				transform.previous_scale.x
-				+ (transform.scale.x - transform.previous_scale.x)
-				* self.interpolation_alpha,
-				transform.previous_scale.y
-				+ (transform.scale.y - transform.previous_scale.y)
-				* self.interpolation_alpha,
-				transform.previous_scale.z
-				+ (transform.scale.z - transform.previous_scale.z)
-				* self.interpolation_alpha,
-			)
+			instance = RenderInstance(self.create_model_matrix(transform), len(batch.instances))
+			batch.instances.append(instance)
+			batch.entity_instances[entity] = instance
+			self.entity_render_batches[entity] = batch
 
-			model_matrix = (
+		self.render_batches_built = True
 
-					Mat4.translation(render_position)
-					@ Mat4.rotation_y(render_rotation.y)
-					@ Mat4.rotation_x(render_rotation.x)
-					@ Mat4.rotation_z(render_rotation.z)
-					@ Mat4.scale(render_scale)
-			)
-			batches[key].instances.append(
-				RenderInstance(model_matrix)
-			)
-		return batches
-
-	def save_previous_state(self):
-		for entity, transform in self.world.query(TransformComponent):
-			transform.save_previous_state()
+		return self.render_batches
 
 	def create_pipeline(self, shader_path):
 		shader = self.device.create_shader_module(
@@ -500,7 +480,8 @@ class GameApp:
 				],
 			},
 			primitive={
-				"topology": "triangle-list"
+				"topology": "triangle-list",
+				"cull_mode": "back"
 			},
 			depth_stencil={
 				"format": "depth24plus",
@@ -517,26 +498,60 @@ class GameApp:
 
 		return self.pipeline_cache[shader_path]
 
-	def upload_instance_buffer(self, batch):
-		data = b""
+	def create_model_matrix(self, transform):
+		return (
+				Mat4.translation(transform.position)
+				@ Mat4.rotation_y(transform.rotation.y)
+				@ Mat4.rotation_x(transform.rotation.x)
+				@ Mat4.rotation_z(transform.rotation.z)
+				@ Mat4.scale(transform.scale)
+		)
 
-		for instance in batch.instances:
-			data += struct.pack(
+	def upload_instance_buffer(self, batch):
+		instance_count = len(batch.instances)
+
+		if instance_count == 0:
+			return
+
+		data = b"".join(
+			struct.pack(
 				"16f",
 				*instance.model_matrix.to_column_major_floats()
 			)
-
-		if batch.instance_buffer is not None:
-			batch.instance_buffer.destroy()
-
-		batch.instance_buffer = self.device.create_buffer(
-			size=len(data),
-			usage=wgpu.BufferUsage.VERTEX | wgpu.BufferUsage.COPY_DST
+			for instance in batch.instances
 		)
+
+		required_size = instance_count * 64
+
+		if batch.instance_buffer is None or required_size > batch.instance_capacity:
+			if batch.instance_buffer is not None:
+				batch.instance_buffer.destroy()
+
+			batch.instance_capacity = max(
+				64,
+				2 ** (required_size - 1).bit_length()
+			)
+
+			batch.instance_buffer = self.device.create_buffer(
+				size=batch.instance_capacity,
+				usage=wgpu.BufferUsage.VERTEX | wgpu.BufferUsage.COPY_DST
+			)
 
 		self.device.queue.write_buffer(
 			batch.instance_buffer,
 			0,
+			data
+		)
+
+	def upload_instance(self, batch, instance):
+		data = struct.pack(
+			"16f",
+			*instance.model_matrix.to_column_major_floats()
+		)
+
+		self.device.queue.write_buffer(
+			batch.instance_buffer,
+			instance.index * 64,
 			data
 		)
 
@@ -549,6 +564,38 @@ class GameApp:
 
 		self.depth_view = self.depth_texture.create_view()
 		self.depth_size = (width, height)
+
+	def update_dirty_entities(self):
+		for entity in self.world.entities.values():
+			if not entity.is_dirty():
+				continue
+
+			transform = entity.get(TransformComponent)
+
+			if transform is not None and transform.dirty:
+				batch = self.entity_render_batches.get(entity)
+
+				if batch is not None:
+					instance = batch.entity_instances[entity]
+
+					instance.model_matrix = self.create_model_matrix(
+						transform
+					)
+
+					self.upload_instance(
+						batch,
+						instance
+					)
+
+			entity.clear_dirty()
+
+	# TODO: this is distance culling and not frustum culling
+	def is_entity_visible(self, transform):
+		position = transform.position
+
+		camera_to_object = position - self.camera.position
+
+		return camera_to_object.length() < self.camera.far
 
 
 def main() -> None:

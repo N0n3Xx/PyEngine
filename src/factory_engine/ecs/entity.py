@@ -16,3 +16,13 @@ class Entity:
 
 	def get(self, component_type):
 		return self.components[component_type]
+
+	def is_dirty(self):
+		return any(
+			component.dirty
+			for component in self.components.values()
+		)
+
+	def clear_dirty(self):
+		for component in self.components.values():
+			component.dirty = False

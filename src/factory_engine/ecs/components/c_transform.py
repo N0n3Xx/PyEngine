@@ -9,43 +9,11 @@ class TransformComponent:
 			rotation=None,
 			scale=None,
 	):
-		self.position = position or Vec3(0,0,0)
-		self.rotation = rotation or Vec3(0,0,0)
-		self.scale = scale or Vec3(1,1,1)
+		self.dirty = True
 
-		# For interpolation
-		self.previous_position = Vec3(
-			self.position.x,
-			self.position.y,
-			self.position.z
-		)
-		self.previous_rotation = Vec3(
-			self.rotation.x,
-			self.rotation.y,
-			self.rotation.z
-		)
-		self.previous_scale = Vec3(
-			self.scale.x,
-			self.scale.y,
-			self.scale.z
-		)
-
-	def save_previous_state(self) -> None:
-		self.previous_position = Vec3(
-			self.position.x,
-			self.position.y,
-			self.position.z
-		)
-		self.previous_rotation = Vec3(
-			self.rotation.x,
-			self.rotation.y,
-			self.rotation.z
-		)
-		self.previous_scale = Vec3(
-			self.scale.x,
-			self.scale.y,
-			self.scale.z
-		)
+		self.position = position or Vec3(0, 0, 0)
+		self.rotation = rotation or Vec3(0, 0, 0)
+		self.scale = scale or Vec3(1, 1, 1)
 
 	def __repr__(self):
 		return f"Transform(position={self.position}, rotation={self.rotation}, scale={self.scale})"
@@ -61,9 +29,12 @@ class TransformComponent:
 
 	def set_position(self, position):
 		self.position = position
+		self.dirty = True
 
 	def set_rotation(self, rotation):
 		self.rotation = rotation
+		self.dirty = True
 
 	def set_scale(self, scale):
 		self.scale = scale
+		self.dirty = True
