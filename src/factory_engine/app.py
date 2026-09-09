@@ -11,13 +11,13 @@ import struct
 from .ecs.components.c_material import MaterialComponent
 from .ecs.components.c_mesh import MeshRenderer
 from .ecs.components.c_transform import TransformComponent
-from .ecs.entity import Entity
 from .ecs.world import World
 
 from factory_engine.rendering.camera import Camera
 from .math3d import Vec3, Mat4
 from .input_handler import InputHandler
 from factory_engine.rendering.mesh import Mesh
+from factory_engine.rendering.skybox import Skybox
 from .rendering.render_batch import RenderBatch
 from .rendering.render_instance import RenderInstance
 
@@ -79,6 +79,12 @@ class GameApp:
 		adapter = wgpu.gpu.request_adapter_sync(power_preference="high-performance")
 		self.device = adapter.request_device_sync()
 
+		self.skybox = Skybox(
+			self.device,
+			Path(__file__).parents[2] / "assets" / "skybox" / "sample_skybox"
+		)
+		self.skybox_vertex_buffer = Skybox.create_skybox_mesh(self.device)
+
 		self.context = self.canvas.get_wgpu_context()
 		self.texture_format = self.context.get_preferred_format(self.device.adapter)
 		self.context.configure(device=self.device, format=self.texture_format)
@@ -91,6 +97,11 @@ class GameApp:
 			self.create_depth_texture(width, height)
 
 		self.camera_buffer = self.device.create_buffer(
+			size=64,
+			usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST
+		)
+
+		self.skybox_buffer = self.device.create_buffer(
 			size=64,
 			usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST
 		)
@@ -133,6 +144,33 @@ class GameApp:
 			]
 		)
 
+		self.skybox_bind_group_layout = self.device.create_bind_group_layout(
+			entries=[
+				{
+					"binding": 0,
+					"visibility": wgpu.ShaderStage.VERTEX | wgpu.ShaderStage.FRAGMENT,
+					"buffer": {
+						"type": wgpu.BufferBindingType.uniform
+					}
+				},
+				{
+					"binding": 1,
+					"visibility": wgpu.ShaderStage.FRAGMENT,
+					"sampler": {
+						"type": wgpu.SamplerBindingType.filtering
+					}
+				},
+				{
+					"binding": 2,
+					"visibility": wgpu.ShaderStage.FRAGMENT,
+					"texture": {
+						"sample_type": wgpu.TextureSampleType.float,
+						"view_dimension": wgpu.TextureViewDimension.cube
+					}
+				}
+			]
+		)
+
 		self.bind_group = self.device.create_bind_group(
 			layout=self.bind_group_layout,
 			entries=[
@@ -150,6 +188,29 @@ class GameApp:
 				}
 			]
 		)
+
+		self.skybox_bind_group = self.device.create_bind_group(
+			layout=self.skybox_bind_group_layout,
+			entries=[
+				{
+					"binding": 0,
+					"resource": {
+						"buffer": self.skybox_buffer
+					}
+				},
+				{
+					"binding": 1,
+					"resource": self.skybox.sampler
+				},
+				{
+					"binding": 2,
+					"resource": self.skybox.view
+				}
+			]
+		)
+
+		# Create skybox
+		self.skybox_pipeline = self.create_skybox_pipeline()
 
 		# ADD GAMEOBJECTS HERE
 		cube_mesh = Mesh.create_cube(self.device)
@@ -252,6 +313,7 @@ class GameApp:
 		)
 
 		self.render_world(render_pass)
+		self.render_skybox(render_pass)
 
 		render_pass.end()
 
@@ -306,6 +368,24 @@ class GameApp:
 			self.draw_calls += 1
 			self.rendered_instances += instance_count
 			self.rendered_triangles += (gpu_mesh.index_count // 3) * instance_count
+
+	def render_skybox(self, render_pass):
+		render_pass.set_pipeline(self.skybox_pipeline)
+
+		render_pass.set_bind_group(
+			0,
+			self.skybox_bind_group
+		)
+
+		render_pass.set_vertex_buffer(
+			0,
+			self.skybox_vertex_buffer
+		)
+
+		render_pass.draw(
+			36,
+			1
+		)
 
 	def draw_frame(self) -> None:
 		self.update()
@@ -370,6 +450,27 @@ class GameApp:
 			self.camera_buffer,
 			0,
 			data
+		)
+
+		skybox_view = self.camera.view_matrix()
+		skybox_view.values[0][3] = 0.0
+		skybox_view.values[1][3] = 0.0
+		skybox_view.values[2][3] = 0.0
+
+		skybox_view_projection = (
+				self.camera.projection_matrix(aspect_ratio)
+				@ skybox_view
+		)
+
+		skybox_data = struct.pack(
+			"16f",
+			*skybox_view_projection.to_column_major_floats()
+		)
+
+		self.device.queue.write_buffer(
+			self.skybox_buffer,
+			0,
+			skybox_data
 		)
 
 	def build_render_batches(self):
@@ -488,6 +589,58 @@ class GameApp:
 		)
 
 		return pipeline
+
+	def create_skybox_pipeline(self):
+		shader_path = Path(__file__).parent / "shaders" / "skybox.wgsl"
+
+		shader = self.device.create_shader_module(
+			code=shader_path.read_text()
+		)
+
+		pipeline_layout = self.device.create_pipeline_layout(
+			bind_group_layouts=[
+				self.skybox_bind_group_layout
+			]
+		)
+
+		return self.device.create_render_pipeline(
+			layout=pipeline_layout,
+			vertex={
+				"module": shader,
+				"entry_point": "vs_main",
+				"buffers": [
+					{
+						"array_stride": 12,
+						"step_mode": "vertex",
+						"attributes": [
+							{
+								"format": "float32x3",
+								"offset": 0,
+								"shader_location": 0
+							}
+						]
+					}
+				]
+			},
+			fragment={
+				"module": shader,
+				"entry_point": "fs_main",
+				"targets": [
+					{
+						"format": self.texture_format
+					}
+				]
+			},
+			primitive={
+				"topology": "triangle-list",
+				"cull_mode": "front"
+			},
+			depth_stencil={
+				"format": "depth24plus",
+				"depth_write_enabled": False,
+				"depth_compare": "less-equal"
+			}
+		)
 
 	def get_pipeline(self, shader_path):
 		if shader_path not in self.pipeline_cache:
