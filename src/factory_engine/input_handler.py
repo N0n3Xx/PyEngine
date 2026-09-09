@@ -3,6 +3,7 @@
 class InputHandler:
     def __init__(self):
         self.keys_down = set()
+        self.keys_pressed = set()
         self.mouse_look_active = False
         self.last_mouse_position = None
         self.mouse_delta_x = 0.0
@@ -12,7 +13,10 @@ class InputHandler:
         event_type = event["event_type"]
 
         if event_type == "key_down":
-            self.keys_down.add(event["key"].lower())
+            key = event["key"].lower()
+
+            self.keys_down.add(key)
+            self.keys_pressed.add(key)
         elif event_type == "key_up":
             self.keys_down.discard(event["key"].lower())
         elif event_type == "pointer_down":
@@ -45,3 +49,12 @@ class InputHandler:
         
     def is_down(self, key):
         return key.lower() in self.keys_down
+
+    def is_pressed(self, key):
+        key = key.lower()
+
+        if key in self.keys_pressed:
+            self.keys_pressed.remove(key)
+            return True
+
+        return False

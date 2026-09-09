@@ -1,4 +1,6 @@
 # c_transform.py
+import math
+
 from factory_engine.math3d import Vec3
 
 
@@ -37,4 +39,30 @@ class TransformComponent:
 
 	def set_scale(self, scale):
 		self.scale = scale
+		self.dirty = True
+
+	def add_position(self, delta):
+		self.position += delta
+		self.dirty = True
+
+	def add_rotation(self, delta):
+		self.rotation += delta
+		self.dirty = True
+
+	def add_scale(self, delta):
+		self.scale += delta
+		self.dirty = True
+
+	def look_at(self, target):
+		direction = (target - self.position).normalize()
+
+		yaw = math.atan2(direction.x, direction.z)
+		pitch = math.asin(-direction.y)
+
+		self.rotation = Vec3(
+			pitch,
+			yaw,
+			0.0
+		)
+
 		self.dirty = True

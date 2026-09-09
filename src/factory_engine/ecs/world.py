@@ -2,6 +2,7 @@
 
 from .entity import Entity
 
+
 class World:
 	def __init__(self):
 		self.next_entity_id = 0
@@ -44,4 +45,8 @@ class World:
 		return self.entities.get(entity_id)
 
 	def get_entity_by_name(self, entity_name):
-		return self.entities.get(entity_name)
+		for entity in self.entities.values():
+			if entity.name == entity_name:
+				return entity
+
+		return None

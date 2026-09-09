@@ -11,6 +11,7 @@ import struct
 from .ecs.components.c_material import MaterialComponent
 from .ecs.components.c_mesh import MeshRenderer
 from .ecs.components.c_transform import TransformComponent
+from .ecs.entity import Entity
 from .ecs.world import World
 
 from factory_engine.rendering.camera import Camera
@@ -39,6 +40,8 @@ class GameApp:
 		self.render_batches = {}
 		self.entity_render_batches = {}
 		self.render_batches_built = False
+
+		self.DIRTY_BATCH_THRESHOLD = 0.25
 
 		# 60Hz update frequency
 		self.FIXED_DT = 1.0 / 60.0
@@ -151,13 +154,15 @@ class GameApp:
 		# ADD GAMEOBJECTS HERE
 		cube_mesh = Mesh.create_cube(self.device)
 
-		for x in range(10):
+		for x in range(100):
 			for y in range(10):
 				for z in range(10):
 					cube = self.world.create_entity(f"Cube_{x}")
-					cube.add(TransformComponent(position=Vec3(1.0 * x, 1.0 * y, 1.0 * z)))
+					cube.add(TransformComponent(position=Vec3(1.0 * x, 1.0 * y, -1.0 * z)))
 					cube.add(MaterialComponent(shader=Path(__file__).parent / "shaders" / "mesh.wgsl"))
 					cube.add(MeshRenderer(cube_mesh))
+
+		self.start_cube = False
 
 	def update(self) -> None:
 		"""Update game state EVERY FRAME"""
@@ -181,6 +186,9 @@ class GameApp:
 		# update camera and movement
 		self.update_camera_movement(frame_time)
 		self.update_camera()
+
+		if self.input.is_pressed("p"):
+			self.start_cube = not self.start_cube
 
 		# Statistic Printing
 		self.fps_timer += frame_time
@@ -209,8 +217,11 @@ class GameApp:
 
 	def fixed_update(self, delta_time: float) -> None:
 		"""Update at CONFIGURED FREQUENCY (Default: 60Hz)"""
-		cube = self.world.get_entity_by_id(0)
-		cube.get(TransformComponent).set_rotation(Vec3(0.0, self.simulation_time, 0.0))
+		if self.start_cube:
+			for cube in self.world.entities.values():
+				cube.get(TransformComponent).add_rotation(Vec3(0.0, delta_time, 0.0))
+				#cube.get(TransformComponent).add_rotation(Vec3(0.0, delta_time, 0.0))
+
 		self.simulation_time += delta_time
 
 	def render(self) -> None:
@@ -271,16 +282,15 @@ class GameApp:
 				self.upload_instance_buffer(batch)
 				batch.dirty = False
 
+				for entity in batch.entity_instances:
+					entity.clear_dirty()
+
 		self.update_dirty_entities()
 
 		for batch in batches.values():
 			pipeline = self.get_pipeline(batch.material.shader)
 
 			render_pass.set_pipeline(pipeline)
-
-			if batch.dirty:
-				self.upload_instance_buffer(batch)
-				batch.dirty = False
 
 			gpu_mesh = batch.mesh
 
@@ -566,28 +576,51 @@ class GameApp:
 		self.depth_size = (width, height)
 
 	def update_dirty_entities(self):
+		dirty_batches = {}
+
 		for entity in self.world.entities.values():
 			if not entity.is_dirty():
 				continue
 
 			transform = entity.get(TransformComponent)
 
-			if transform is not None and transform.dirty:
-				batch = self.entity_render_batches.get(entity)
+			if transform is None or not transform.dirty:
+				entity.clear_dirty()
+				continue
 
-				if batch is not None:
-					instance = batch.entity_instances[entity]
+			batch = self.entity_render_batches.get(entity)
 
-					instance.model_matrix = self.create_model_matrix(
-						transform
-					)
+			if batch is None:
+				entity.clear_dirty()
+				continue
 
+			instance = batch.entity_instances[entity]
+
+			instance.model_matrix = self.create_model_matrix(
+				transform
+			)
+
+			if batch not in dirty_batches:
+				dirty_batches[batch] = []
+
+			dirty_batches[batch].append(instance)
+
+			entity.clear_dirty()
+
+		for batch, dirty_instances in dirty_batches.items():
+			dirty_count = len(dirty_instances)
+			instance_count = len(batch.instances)
+
+			dirty_ratio = dirty_count / instance_count
+
+			if dirty_ratio >= self.DIRTY_BATCH_THRESHOLD:
+				self.upload_instance_buffer(batch)
+			else:
+				for instance in dirty_instances:
 					self.upload_instance(
 						batch,
 						instance
 					)
-
-			entity.clear_dirty()
 
 	# TODO: this is distance culling and not frustum culling
 	def is_entity_visible(self, transform):
