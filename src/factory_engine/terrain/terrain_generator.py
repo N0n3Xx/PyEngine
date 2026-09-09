@@ -1,5 +1,18 @@
 # terrain_generator.py
 
+# Order of operations:
+#  1. Continentality
+#  2. Geological Map
+#  3. Elevation Map
+#  4. Temperature Map
+#  5. Humidity Map
+#  6. Rainfall Map
+#  7. Biome Map
+#  8. Water Map
+#  9. Terrain Detail
+# 10. Final Height Map
+# 11. Mesh Generation
+
 from noise_generator import NoiseGenerator
 
 class ContinentalityGenerator:
