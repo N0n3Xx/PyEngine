@@ -153,16 +153,10 @@ class GameApp:
 
 		# ADD GAMEOBJECTS HERE
 		cube_mesh = Mesh.create_cube(self.device)
-
-		for x in range(100):
-			for y in range(10):
-				for z in range(10):
-					cube = self.world.create_entity(f"Cube_{x}")
-					cube.add(TransformComponent(position=Vec3(1.0 * x, 1.0 * y, -1.0 * z)))
-					cube.add(MaterialComponent(shader=Path(__file__).parent / "shaders" / "mesh.wgsl"))
-					cube.add(MeshRenderer(cube_mesh))
-
-		self.start_cube = False
+		cube = self.world.create_entity("Cube")
+		cube.add(TransformComponent())
+		cube.add(MaterialComponent(shader=Path(__file__).parent / "shaders" / "mesh.wgsl"))
+		cube.add(MeshRenderer(cube_mesh))
 
 	def update(self) -> None:
 		"""Update game state EVERY FRAME"""
@@ -186,9 +180,6 @@ class GameApp:
 		# update camera and movement
 		self.update_camera_movement(frame_time)
 		self.update_camera()
-
-		if self.input.is_pressed("p"):
-			self.start_cube = not self.start_cube
 
 		# Statistic Printing
 		self.fps_timer += frame_time
@@ -217,10 +208,6 @@ class GameApp:
 
 	def fixed_update(self, delta_time: float) -> None:
 		"""Update at CONFIGURED FREQUENCY (Default: 60Hz)"""
-		if self.start_cube:
-			for cube in self.world.entities.values():
-				cube.get(TransformComponent).add_rotation(Vec3(0.0, delta_time, 0.0))
-				#cube.get(TransformComponent).add_rotation(Vec3(0.0, delta_time, 0.0))
 
 		self.simulation_time += delta_time
 
