@@ -47,7 +47,7 @@ class Terrain:
 
 		chunk2 = Chunk(
 			self,
-			Vec3(-1, 0, 1)
+			Vec3(1, 0, 0)
 		)
 		chunk2.generate()
 		self.chunks.append(chunk2)

@@ -217,6 +217,10 @@ class GameApp:
 			world=self.world
 		)
 
+		self.q = 0.0
+		self.r = 0.0
+		self.s = 0.0
+
 	def update(self) -> None:
 		"""Update game state EVERY FRAME"""
 		# Calculate delta time
@@ -269,13 +273,6 @@ class GameApp:
 
 	def fixed_update(self, delta_time: float) -> None:
 		"""Update at CONFIGURED FREQUENCY (Default: 60Hz)"""
-
-		cells = self.terrain.chunks[0].cells
-
-		for cell in cells:
-			hex_cell = cell.get(HexCellComponent)
-			if hex_cell.coordinates == Vec3(0.0, 0.0, 0.0):
-				cell.get(TransformComponent).add_rotation(Vec3(0.0, delta_time, 0.0))
 
 		self.simulation_time += delta_time
 
