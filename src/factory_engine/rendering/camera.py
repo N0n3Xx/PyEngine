@@ -6,7 +6,7 @@ from factory_engine.math3d import Vec3, Mat4
 
 class Camera:
     def __init__(self):
-        self.position = Vec3(0, 1.0, 5)
+        self.position = Vec3(0, 1.0, 0)
         self.target = Vec3(0, 0, 0)
         self.up = Vec3(0, 1, 0)
         self.fov_y = 60.0

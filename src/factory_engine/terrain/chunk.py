@@ -7,16 +7,15 @@ from factory_engine.ecs.components.c_mesh import MeshRenderer
 from factory_engine.ecs.components.c_transform import TransformComponent
 from factory_engine.math3d import Vec3
 from factory_engine.rendering.mesh import Mesh
-from factory_engine.settings import HEX_INNER_RADIUS, HEX_OUTER_RADIUS, CHUNK_SIDE_LENGTH
+from factory_engine.settings import HEX_INNER_RADIUS, HEX_OUTER_RADIUS, CHUNK_SIDE_LENGTH, CHUNK_OUTER_RADIUS, \
+	CHUNK_INNER_RADIUS
 
 
 class Chunk:
-	def __init__(self, terrain, position, lod=0):
+	def __init__(self, terrain, coordinates, lod=0):
 		self.terrain = terrain
-		self.position = position
+		self.coordinates = coordinates
 		self.lod = lod
-
-		self.side_length = CHUNK_SIDE_LENGTH
 
 		self.chunk_neighbors = {}
 		self.cells = []
@@ -24,7 +23,7 @@ class Chunk:
 		self.cube = Mesh.create_cube(self.terrain.device)
 
 	def generate(self):
-		radius = self.side_length - 1
+		radius = int(CHUNK_SIDE_LENGTH) - 1
 		index = 0
 
 		for q in range(-radius, radius + 1):
@@ -45,11 +44,13 @@ class Chunk:
 	# return height
 
 	def generate_cell(self, q, r, s, index):
-		pos = Vec3(
+		local_pos = Vec3(
 			(r + q * 0.5) * (HEX_INNER_RADIUS * 2.0),
 			0.0,
 			q * (HEX_OUTER_RADIUS * 1.5)
 		)
+
+		pos = self.get_world_position() + local_pos
 
 		hex_cell = self.terrain.world.create_entity(f"HexCell{index}")
 		hex_cell.add(TransformComponent(position=pos))
@@ -58,3 +59,10 @@ class Chunk:
 		hex_cell.add(MeshRenderer(self.cube))
 
 		self.cells.append(hex_cell)
+
+	def get_world_position(self):
+		return Vec3(
+			(self.coordinates.x + self.coordinates.z) * CHUNK_OUTER_RADIUS,
+			0,
+			self.coordinates.z * CHUNK_INNER_RADIUS * 2
+		)

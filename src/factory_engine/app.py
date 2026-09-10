@@ -1,5 +1,4 @@
 """Application setup and render loop."""
-
 import wgpu
 from rendercanvas.glfw import RenderCanvas, loop
 import time
@@ -8,6 +7,7 @@ from pathlib import Path
 
 import struct
 
+from .ecs.components.c_hex_cell import HexCellComponent
 from .ecs.components.c_material import MaterialComponent
 from .ecs.components.c_mesh import MeshRenderer
 from .ecs.components.c_transform import TransformComponent
@@ -20,7 +20,7 @@ from factory_engine.rendering.mesh import Mesh
 from factory_engine.rendering.skybox import Skybox
 from .rendering.render_batch import RenderBatch
 from .rendering.render_instance import RenderInstance
-from .settings import WINDOW_HEIGHT, WINDOW_WIDTH, FIXED_UPDATE_RATE, MAX_SIM_UPDATES_PER_FRAME
+from .settings import WINDOW_HEIGHT, WINDOW_WIDTH, FIXED_UPDATE_RATE, MAX_SIM_UPDATES_PER_FRAME, DIRTY_BATCH_THRESHOLD
 from .terrain.terrain import Terrain
 
 
@@ -217,8 +217,6 @@ class GameApp:
 			world=self.world
 		)
 
-		print(self.world.entities)
-
 	def update(self) -> None:
 		"""Update game state EVERY FRAME"""
 		# Calculate delta time
@@ -241,6 +239,8 @@ class GameApp:
 		# update camera and movement
 		self.update_camera_movement(frame_time)
 		self.update_camera()
+
+		#print(f"Camera X:{self.camera.position.x:.3f}, Y:{self.camera.position.y:.3f}, Z:{self.camera.position.z:.3f}")
 
 		# Statistic Printing
 		self.fps_timer += frame_time
@@ -269,6 +269,13 @@ class GameApp:
 
 	def fixed_update(self, delta_time: float) -> None:
 		"""Update at CONFIGURED FREQUENCY (Default: 60Hz)"""
+
+		cells = self.terrain.chunks[0].cells
+
+		for cell in cells:
+			hex_cell = cell.get(HexCellComponent)
+			if hex_cell.coordinates == Vec3(0.0, 0.0, 0.0):
+				cell.get(TransformComponent).add_rotation(Vec3(0.0, delta_time, 0.0))
 
 		self.simulation_time += delta_time
 
@@ -753,7 +760,7 @@ class GameApp:
 
 			dirty_ratio = dirty_count / instance_count
 
-			if dirty_ratio >= self.DIRTY_BATCH_THRESHOLD:
+			if dirty_ratio >= DIRTY_BATCH_THRESHOLD:
 				self.upload_instance_buffer(batch)
 			else:
 				for instance in dirty_instances:

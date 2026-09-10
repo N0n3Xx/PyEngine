@@ -41,6 +41,16 @@ class Vec3:
 	def __rmul__(self, other):
 		return self * other
 
+	def __eq__(self, other):
+		if not isinstance(other, Vec3):
+			return NotImplemented
+
+		return (
+				self.x == other.x
+				and self.y == other.y
+				and self.z == other.z
+		)
+
 	def length(self):
 		return math.sqrt(
 			self.x * self.x +
