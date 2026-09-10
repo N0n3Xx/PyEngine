@@ -10,6 +10,35 @@ class Mesh:
         self.index_count = index_count
 
     @staticmethod
+    def create(device, vertices, indices):
+        vertex_data = struct.pack(
+            f"{len(vertices)}f",
+            *vertices
+        )
+
+        # Pack indices as unsigned 16-bit ints
+        index_data = struct.pack(
+            f"{len(indices)}H",
+            *indices
+        )
+
+        vertex_buffer = device.create_buffer_with_data(
+            data=vertex_data,
+            usage=wgpu.BufferUsage.VERTEX,
+        )
+
+        index_buffer = device.create_buffer_with_data(
+            data=index_data,
+            usage=wgpu.BufferUsage.INDEX,
+        )
+
+        return Mesh(
+            vertex_buffer=vertex_buffer,
+            index_buffer=index_buffer,
+            index_count=len(indices)
+        )
+
+    @staticmethod
     def create_cube(device):
         # Each vertex contains:
         #
@@ -86,30 +115,4 @@ class Mesh:
             20, 23, 22 
         ]
 
-        # Pack positions as float32
-        vertex_data = struct.pack(
-            f"{len(vertices)}f",
-            *vertices
-        )
-
-        # Pack indices as unsigned 16-bit ints
-        index_data = struct.pack(
-            f"{len(indices)}H",
-            *indices
-        )
-
-        vertex_buffer = device.create_buffer_with_data(
-            data=vertex_data,
-            usage=wgpu.BufferUsage.VERTEX,
-        )
-
-        index_buffer = device.create_buffer_with_data(
-            data=index_data,
-            usage=wgpu.BufferUsage.INDEX,
-        )
-
-        return Mesh(
-            vertex_buffer=vertex_buffer,
-            index_buffer=index_buffer,
-            index_count=len(indices)
-        )
+        return Mesh.create(device, vertices, indices)

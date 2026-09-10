@@ -13,7 +13,7 @@
 # 10. Final Height Map
 # 11. Mesh Generation
 
-from noise_generator import NoiseGenerator
+from .noise_generator import NoiseGenerator
 
 
 class ContinentalityGenerator:

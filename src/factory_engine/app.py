@@ -20,6 +20,8 @@ from factory_engine.rendering.mesh import Mesh
 from factory_engine.rendering.skybox import Skybox
 from .rendering.render_batch import RenderBatch
 from .rendering.render_instance import RenderInstance
+from .settings import WINDOW_HEIGHT, WINDOW_WIDTH, FIXED_UPDATE_RATE, MAX_SIM_UPDATES_PER_FRAME
+from .terrain.terrain import Terrain
 
 
 class GameApp:
@@ -27,7 +29,7 @@ class GameApp:
 
 	def __init__(self) -> None:
 		self.canvas = RenderCanvas(
-			size=(1280, 720),
+			size=(WINDOW_WIDTH, WINDOW_HEIGHT),
 			title="Factory Game",
 			vsync=False,
 			update_mode="fastest"  # Fastest or continuous
@@ -41,11 +43,7 @@ class GameApp:
 		self.entity_render_batches = {}
 		self.render_batches_built = False
 
-		self.DIRTY_BATCH_THRESHOLD = 0.25
-
 		# 60Hz update frequency
-		self.FIXED_DT = 1.0 / 60.0
-		self.MAX_UPDATES_PER_FRAME = 5
 		self.accumulator = 0.0
 		self.simulation_time = 0.0
 		self.tps = 0.0
@@ -213,11 +211,13 @@ class GameApp:
 		self.skybox_pipeline = self.create_skybox_pipeline()
 
 		# ADD GAMEOBJECTS HERE
-		cube_mesh = Mesh.create_cube(self.device)
-		cube = self.world.create_entity("Cube")
-		cube.add(TransformComponent())
-		cube.add(MaterialComponent(shader=Path(__file__).parent / "shaders" / "mesh.wgsl"))
-		cube.add(MeshRenderer(cube_mesh))
+		self.terrain = Terrain(
+			seed=1234,
+			device=self.device,
+			world=self.world
+		)
+
+		print(self.world.entities)
 
 	def update(self) -> None:
 		"""Update game state EVERY FRAME"""
@@ -231,11 +231,11 @@ class GameApp:
 
 		updates = 0
 
-		while self.accumulator >= self.FIXED_DT and updates < self.MAX_UPDATES_PER_FRAME:
-			self.fixed_update(self.FIXED_DT)
+		while self.accumulator >= FIXED_UPDATE_RATE and updates < MAX_SIM_UPDATES_PER_FRAME:
+			self.fixed_update(FIXED_UPDATE_RATE)
 
 			self.tps_update_count += 1
-			self.accumulator -= self.FIXED_DT
+			self.accumulator -= FIXED_UPDATE_RATE
 			updates += 1
 
 		# update camera and movement
