@@ -210,16 +210,12 @@ class GameApp:
 		# Create skybox
 		self.skybox_pipeline = self.create_skybox_pipeline()
 
-		# ADD GAMEOBJECTS HERE
+		# Generate Terrain
 		self.terrain = Terrain(
 			seed=1234,
 			device=self.device,
 			world=self.world
 		)
-
-		self.q = 0.0
-		self.r = 0.0
-		self.s = 0.0
 
 	def update(self) -> None:
 		"""Update game state EVERY FRAME"""
@@ -244,7 +240,7 @@ class GameApp:
 		self.update_camera_movement(frame_time)
 		self.update_camera()
 
-		#print(f"Camera X:{self.camera.position.x:.3f}, Y:{self.camera.position.y:.3f}, Z:{self.camera.position.z:.3f}")
+		# print(f"Camera X:{self.camera.position.x:.3f}, Y:{self.camera.position.y:.3f}, Z:{self.camera.position.z:.3f}")
 
 		# Statistic Printing
 		self.fps_timer += frame_time
@@ -316,6 +312,7 @@ class GameApp:
 			self.bind_group
 		)
 
+		self.render_terrain(render_pass)
 		self.render_world(render_pass)
 		self.render_skybox(render_pass)
 
@@ -372,6 +369,35 @@ class GameApp:
 			self.draw_calls += 1
 			self.rendered_instances += instance_count
 			self.rendered_triangles += (gpu_mesh.index_count // 3) * instance_count
+
+	def render_terrain(self, render_pass):
+		"""Render the Terrain Mesh"""
+		for chunk in self.terrain.chunks.values():
+			if chunk.mesh is None:
+				continue
+
+			pipeline = self.get_terrain_pipeline(chunk.material.shader)
+
+			render_pass.set_pipeline(pipeline)
+
+			render_pass.set_vertex_buffer(
+				0,
+				chunk.mesh.vertex_buffer
+			)
+
+			render_pass.set_index_buffer(
+				chunk.mesh.index_buffer,
+				"uint16"
+			)
+
+			render_pass.draw_indexed(
+				chunk.mesh.index_count,
+				1
+			)
+
+			self.draw_calls += 1
+			self.rendered_instances += 1
+			self.rendered_triangles += chunk.mesh.index_count // 3
 
 	def render_skybox(self, render_pass):
 		render_pass.set_pipeline(self.skybox_pipeline)
@@ -646,9 +672,81 @@ class GameApp:
 			}
 		)
 
+	def create_terrain_pipeline(self):
+		shader_path = Path(__file__).parent / "shaders" / "terrain.wgsl"
+
+		shader = self.device.create_shader_module(
+			code=shader_path.read_text()
+		)
+
+		pipeline_layout = self.device.create_pipeline_layout(
+			bind_group_layouts=[
+				self.bind_group_layout
+			]
+		)
+
+		vertex_buffers = [
+			{
+				"array_stride": 32,
+				"step_mode": "vertex",
+				"attributes": [
+					{
+						"format": "float32x3",
+						"offset": 0,
+						"shader_location": 0
+					},
+					{
+						"format": "float32x3",
+						"offset": 12,
+						"shader_location": 1
+					},
+					{
+						"format": "float32x2",
+						"offset": 24,
+						"shader_location": 2
+					}
+				]
+			}
+		]
+
+		pipeline = self.device.create_render_pipeline(
+			layout=pipeline_layout,
+			vertex={
+				"module": shader,
+				"entry_point": "vs_main",
+				"buffers": vertex_buffers
+			},
+			fragment={
+				"module": shader,
+				"entry_point": "fs_main",
+				"targets": [
+					{
+						"format": self.texture_format
+					}
+				],
+			},
+			primitive={
+				"topology": "triangle-list",
+				"cull_mode": "back"
+			},
+			depth_stencil={
+				"format": "depth24plus",
+				"depth_write_enabled": True,
+				"depth_compare": "less"
+			}
+		)
+
+		return pipeline
+
 	def get_pipeline(self, shader_path):
 		if shader_path not in self.pipeline_cache:
 			self.pipeline_cache[shader_path] = self.create_pipeline(shader_path)
+
+		return self.pipeline_cache[shader_path]
+
+	def get_terrain_pipeline(self, shader_path):
+		if shader_path not in self.pipeline_cache:
+			self.pipeline_cache[shader_path] = self.create_terrain_pipeline()
 
 		return self.pipeline_cache[shader_path]
 

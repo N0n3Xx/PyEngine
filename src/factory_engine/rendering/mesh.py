@@ -1,118 +1,129 @@
-#mesh.py
+# mesh.py
 
 import struct
 import wgpu
 
+from factory_engine.math3d import Vec3
+
+
 class Mesh:
-    def __init__(self, vertex_buffer, index_buffer, index_count):
-        self.vertex_buffer = vertex_buffer
-        self.index_buffer = index_buffer
-        self.index_count = index_count
+	def __init__(self, vertex_buffer, index_buffer, index_count):
+		self.vertex_buffer = vertex_buffer
+		self.index_buffer = index_buffer
+		self.index_count = index_count
 
-    @staticmethod
-    def create(device, vertices, indices):
-        vertex_data = struct.pack(
-            f"{len(vertices)}f",
-            *vertices
-        )
+	@staticmethod
+	def create(device, vertices, indices):
+		# Flatten Vec3 vertices into x, y, z floats.
+		if vertices and isinstance(vertices[0], Vec3):
+			vertices = [
+				component
+				for vertex in vertices
+				for component in (vertex.x, vertex.y, vertex.z)
+			]
 
-        # Pack indices as unsigned 16-bit ints
-        index_data = struct.pack(
-            f"{len(indices)}H",
-            *indices
-        )
+		vertex_data = struct.pack(
+			f"{len(vertices)}f",
+			*vertices
+		)
 
-        vertex_buffer = device.create_buffer_with_data(
-            data=vertex_data,
-            usage=wgpu.BufferUsage.VERTEX,
-        )
+		# Pack indices as unsigned 16-bit ints
+		index_data = struct.pack(
+			f"{len(indices)}H",
+			*indices
+		)
 
-        index_buffer = device.create_buffer_with_data(
-            data=index_data,
-            usage=wgpu.BufferUsage.INDEX,
-        )
+		vertex_buffer = device.create_buffer_with_data(
+			data=vertex_data,
+			usage=wgpu.BufferUsage.VERTEX,
+		)
 
-        return Mesh(
-            vertex_buffer=vertex_buffer,
-            index_buffer=index_buffer,
-            index_count=len(indices)
-        )
+		index_buffer = device.create_buffer_with_data(
+			data=index_data,
+			usage=wgpu.BufferUsage.INDEX,
+		)
 
-    @staticmethod
-    def create_cube(device):
-        # Each vertex contains:
-        #
-        #   position: 3 × float32
-        #   normal:   3 × float32
-        #
-        # Total: 6 × float32 = 24 bytes per vertex.
-        #
-        # We use 4 vertices per face so that each face can have
-        # its own flat normal.
+		return Mesh(
+			vertex_buffer=vertex_buffer,
+			index_buffer=index_buffer,
+			index_count=len(indices)
+		)
 
-        vertices = [
-            # Bottom (-Y)
-            -0.5, -0.5, -0.5,  0.0, -1.0,  0.0, #  0
-             0.5, -0.5, -0.5,  0.0, -1.0,  0.0, #  1
-             0.5, -0.5,  0.5,  0.0, -1.0,  0.0, #  2
-            -0.5, -0.5,  0.5,  0.0, -1.0,  0.0, #  3
+	@staticmethod
+	def create_cube(device):
+		# Each vertex contains:
+		#
+		#   position: 3 × float32
+		#   normal:   3 × float32
+		#
+		# Total: 6 × float32 = 24 bytes per vertex.
+		#
+		# We use 4 vertices per face so that each face can have
+		# its own flat normal.
 
-            # Top (+Y)
-            -0.5,  0.5, -0.5,  0.0,  1.0,  0.0, #  4
-             0.5,  0.5, -0.5,  0.0,  1.0,  0.0, #  5
-             0.5,  0.5,  0.5,  0.0,  1.0,  0.0, #  6
-            -0.5,  0.5,  0.5,  0.0,  1.0,  0.0, #  7
+		vertices = [
+			# Bottom (-Y)
+			-0.5, -0.5, -0.5, 0.0, -1.0, 0.0,  # 0
+			0.5, -0.5, -0.5, 0.0, -1.0, 0.0,  # 1
+			0.5, -0.5, 0.5, 0.0, -1.0, 0.0,  # 2
+			-0.5, -0.5, 0.5, 0.0, -1.0, 0.0,  # 3
 
-            # Front (+Z)
-            -0.5,  0.5,  0.5,  0.0,  0.0,  1.0, #  8
-             0.5,  0.5,  0.5,  0.0,  0.0,  1.0, #  9
-             0.5, -0.5,  0.5,  0.0,  0.0,  1.0, # 10
-            -0.5, -0.5,  0.5,  0.0,  0.0,  1.0, # 11
+			# Top (+Y)
+			-0.5, 0.5, -0.5, 0.0, 1.0, 0.0,  # 4
+			0.5, 0.5, -0.5, 0.0, 1.0, 0.0,  # 5
+			0.5, 0.5, 0.5, 0.0, 1.0, 0.0,  # 6
+			-0.5, 0.5, 0.5, 0.0, 1.0, 0.0,  # 7
 
-            # Back (-Z)
-            -0.5,  0.5, -0.5,  0.0,  0.0, -1.0, # 12
-             0.5,  0.5, -0.5,  0.0,  0.0, -1.0, # 13
-             0.5, -0.5, -0.5,  0.0,  0.0, -1.0, # 14
-            -0.5, -0.5, -0.5,  0.0,  0.0, -1.0, # 15
+			# Front (+Z)
+			-0.5, 0.5, 0.5, 0.0, 0.0, 1.0,  # 8
+			0.5, 0.5, 0.5, 0.0, 0.0, 1.0,  # 9
+			0.5, -0.5, 0.5, 0.0, 0.0, 1.0,  # 10
+			-0.5, -0.5, 0.5, 0.0, 0.0, 1.0,  # 11
 
-            # Left (-X)
-            -0.5,  0.5,  0.5, -1.0,  0.0,  0.0, # 16
-            -0.5,  0.5, -0.5, -1.0,  0.0,  0.0, # 17
-            -0.5, -0.5, -0.5, -1.0,  0.0,  0.0, # 18
-            -0.5, -0.5,  0.5, -1.0,  0.0,  0.0, # 19
+			# Back (-Z)
+			-0.5, 0.5, -0.5, 0.0, 0.0, -1.0,  # 12
+			0.5, 0.5, -0.5, 0.0, 0.0, -1.0,  # 13
+			0.5, -0.5, -0.5, 0.0, 0.0, -1.0,  # 14
+			-0.5, -0.5, -0.5, 0.0, 0.0, -1.0,  # 15
 
-            # Right (+X)
-             0.5,  0.5,  0.5,  1.0,  0.0,  0.0, # 20
-             0.5,  0.5, -0.5,  1.0,  0.0,  0.0, # 21
-             0.5, -0.5, -0.5,  1.0,  0.0,  0.0, # 22
-             0.5, -0.5,  0.5,  1.0,  0.0,  0.0, # 23
-        ]
+			# Left (-X)
+			-0.5, 0.5, 0.5, -1.0, 0.0, 0.0,  # 16
+			-0.5, 0.5, -0.5, -1.0, 0.0, 0.0,  # 17
+			-0.5, -0.5, -0.5, -1.0, 0.0, 0.0,  # 18
+			-0.5, -0.5, 0.5, -1.0, 0.0, 0.0,  # 19
 
-        # Six Faces, 12 Triangles
-        indices = [
-            # Bottom
-             0,  1,  2,
-             0,  2,  3,
+			# Right (+X)
+			0.5, 0.5, 0.5, 1.0, 0.0, 0.0,  # 20
+			0.5, 0.5, -0.5, 1.0, 0.0, 0.0,  # 21
+			0.5, -0.5, -0.5, 1.0, 0.0, 0.0,  # 22
+			0.5, -0.5, 0.5, 1.0, 0.0, 0.0,  # 23
+		]
 
-            # Top
-             4,  6,  5,
-             4,  7,  6,
+		# Six Faces, 12 Triangles
+		indices = [
+			# Bottom
+			0, 1, 2,
+			0, 2, 3,
 
-            # Front
-             8, 10,  9,
-             8, 11, 10,
+			# Top
+			4, 6, 5,
+			4, 7, 6,
 
-            # Back
-            12, 13, 14,
-            12, 14, 15,
+			# Front
+			8, 10, 9,
+			8, 11, 10,
 
-            # Left
-            16, 18, 19,
-            16, 17, 18,
+			# Back
+			12, 13, 14,
+			12, 14, 15,
 
-            # Right
-            20, 22, 21,
-            20, 23, 22 
-        ]
+			# Left
+			16, 18, 19,
+			16, 17, 18,
 
-        return Mesh.create(device, vertices, indices)
+			# Right
+			20, 22, 21,
+			20, 23, 22
+		]
+
+		return Mesh.create(device, vertices, indices)

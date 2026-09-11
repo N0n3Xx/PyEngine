@@ -3,11 +3,11 @@ from pathlib import Path
 
 from factory_engine.ecs.components.c_hex_cell import HexCellComponent
 from factory_engine.ecs.components.c_material import MaterialComponent
-from factory_engine.ecs.components.c_mesh import MeshRenderer
 from factory_engine.ecs.components.c_transform import TransformComponent
 from factory_engine.math3d import Vec3
 from factory_engine.rendering.mesh import Mesh
 from factory_engine.settings import HEX_INNER_RADIUS, HEX_OUTER_RADIUS, CHUNK_SIZE
+from factory_engine.terrain.chunk_mesher import ChunkMesher
 
 
 class Chunk:
@@ -19,7 +19,10 @@ class Chunk:
 		self.chunk_neighbors = {}
 		self.cells = []
 
-		self.cube = Mesh.create_cube(self.terrain.device)
+		self.mesher = ChunkMesher()
+		self.mesh = None
+
+		self.material = MaterialComponent(shader=Path(__file__).parents[1] / "shaders" / "mesh.wgsl")
 
 	def generate(self):
 		for x in range(CHUNK_SIZE):
@@ -32,6 +35,10 @@ class Chunk:
 	# height = self.terrain.generate_height(x, z)
 
 	# return height
+
+	def mesh_chunk(self):
+		vertices, indices = self.mesher.triangulate(self.cells)
+		self.mesh = Mesh.create(self.terrain.device, vertices, indices)
 
 	def generate_cell(self, cell_coord, index):
 		local_pos = Vec3(
@@ -49,8 +56,6 @@ class Chunk:
 		hex_cell = self.terrain.world.create_entity(f"HexCell{index}")
 		hex_cell.add(TransformComponent(position=pos))
 		hex_cell.add(HexCellComponent(Vec3(q, r, s)))
-		hex_cell.add(MaterialComponent(shader=Path(__file__).parents[1] / "shaders" / "mesh.wgsl"))
-		hex_cell.add(MeshRenderer(self.cube))
 
 		self.cells.append(hex_cell)
 
@@ -58,5 +63,5 @@ class Chunk:
 		return Vec3(
 			self.chunk_coords.x * (CHUNK_SIZE * HEX_INNER_RADIUS * 2.0),
 			self.chunk_coords.y,
-			self.chunk_coords.z * (CHUNK_SIZE * HEX_OUTER_RADIUS * 2.0)
+			self.chunk_coords.z * (CHUNK_SIZE * HEX_OUTER_RADIUS * 1.5)
 		)

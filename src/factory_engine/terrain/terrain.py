@@ -22,7 +22,7 @@ class Terrain:
 		self.world = world
 
 		self.render_distance = 400.0
-		self.chunks = []
+		self.chunks = {}
 		self.streaming_sources = []  # List of objects to influence e.g. visibility of chunks
 
 		# The different generators
@@ -38,19 +38,15 @@ class Terrain:
 		self.final_height_generator = None
 		self.setup_generators()
 
-		chunk = Chunk(
-			self,
-			Vec3(0, 0, 0)
-		)
-		chunk.generate()
-		self.chunks.append(chunk)
-
-		chunk2 = Chunk(
-			self,
-			Vec3(1, 0, 0)
-		)
-		chunk2.generate()
-		self.chunks.append(chunk2)
+		for x in range(0, 3):
+			for z in range(0, 3):
+				chunk = Chunk(
+					self,
+					Vec3(x, 0, z)
+				)
+				chunk.generate()
+				self.chunks[chunk] = chunk
+				chunk.mesh_chunk()
 
 	def setup_generators(self):
 		self.continentality_generator = ContinentalityGenerator(self.seed)
