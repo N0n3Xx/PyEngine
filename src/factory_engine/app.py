@@ -43,7 +43,6 @@ class GameApp:
 		self.entity_render_batches = {}
 		self.render_batches_built = False
 
-		# 60Hz update frequency
 		self.accumulator = 0.0
 		self.simulation_time = 0.0
 		self.tps = 0.0
@@ -95,7 +94,7 @@ class GameApp:
 			self.create_depth_texture(width, height)
 
 		self.camera_buffer = self.device.create_buffer(
-			size=64,
+			size=80,
 			usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST
 		)
 
@@ -127,7 +126,7 @@ class GameApp:
 			entries=[
 				{
 					"binding": 0,
-					"visibility": wgpu.ShaderStage.VERTEX,
+					"visibility": wgpu.ShaderStage.VERTEX | wgpu.ShaderStage.FRAGMENT,
 					"buffer": {
 						"type": wgpu.BufferBindingType.uniform
 					}
@@ -196,6 +195,33 @@ class GameApp:
 			]
 		)
 
+		self.environment_bind_group_layout = self.device.create_bind_group_layout(
+			entries=[
+				{
+					"binding": 0,
+					"visibility": wgpu.ShaderStage.FRAGMENT,
+					"sampler": {
+						"type": wgpu.SamplerBindingType.filtering
+					}
+				},
+				{
+					"binding": 1,
+					"visibility": wgpu.ShaderStage.FRAGMENT,
+					"texture": {
+						"sample_type": wgpu.TextureSampleType.float,
+						"view_dimension": wgpu.TextureViewDimension.cube
+					}
+				}
+			]
+		)
+
+		self.material_resources = {}
+		(
+			self.default_texture,
+			self.default_texture_view,
+			self.default_sampler,
+		) = self.create_default_texture()
+
 		self.bind_group = self.device.create_bind_group(
 			layout=self.bind_group_layout,
 			entries=[
@@ -229,6 +255,20 @@ class GameApp:
 				},
 				{
 					"binding": 2,
+					"resource": self.skybox.view
+				}
+			]
+		)
+
+		self.environment_bind_group = self.device.create_bind_group(
+			layout=self.environment_bind_group_layout,
+			entries=[
+				{
+					"binding": 0,
+					"resource": self.skybox.sampler
+				},
+				{
+					"binding": 1,
 					"resource": self.skybox.view
 				}
 			]
@@ -403,9 +443,25 @@ class GameApp:
 			if chunk.mesh is None:
 				continue
 
-			pipeline = self.get_terrain_pipeline(chunk.material.shader)
+			material = chunk.material
+
+			pipeline = self.get_terrain_pipeline(chunk.material.shader_path)
+
+			material_resources = self.get_material_resources(
+				material
+			)
 
 			render_pass.set_pipeline(pipeline)
+
+			render_pass.set_bind_group(
+				1,
+				material_resources["bind_group"]
+			)
+
+			render_pass.set_bind_group(
+				2,
+				self.environment_bind_group
+			)
 
 			render_pass.set_vertex_buffer(
 				0,
@@ -499,8 +555,12 @@ class GameApp:
 		view_projection_matrix = view_projection.to_column_major_floats()
 
 		data = struct.pack(
-			"16f",
-			*view_projection_matrix
+			"16f4f",
+			*view_projection_matrix,
+			self.camera.position.x,
+			self.camera.position.y,
+			self.camera.position.z,
+			0.0
 		)
 
 		self.device.queue.write_buffer(
@@ -709,7 +769,8 @@ class GameApp:
 		pipeline_layout = self.device.create_pipeline_layout(
 			bind_group_layouts=[
 				self.bind_group_layout,
-				self.material_bind_group_layout
+				self.material_bind_group_layout,
+				self.environment_bind_group_layout,
 			]
 		)
 
@@ -891,6 +952,180 @@ class GameApp:
 						batch,
 						instance
 					)
+
+	def pack_material_parameters(self, material):
+		base_color = material.get_parameter(
+			"base_color",
+			(1.0, 1.0, 1.0, 1.0)
+		)
+
+		metallic = material.get_parameter(
+			"metallic",
+			0.0
+		)
+
+		roughness = material.get_parameter(
+			"roughness",
+			1.0
+		)
+
+		return struct.pack(
+			"4f2f2f",  # 4 floats base_color, 2 floats metallic + roughness, 2 floats padding
+			base_color[0],
+			base_color[1],
+			base_color[2],
+			base_color[3],
+			metallic,
+			roughness,
+			0.0,
+			0.0
+		)
+
+	def create_material_resources(self, material):
+		parameter_data = self.pack_material_parameters(material)
+
+		parameter_buffer = self.device.create_buffer(
+			size=32,
+			usage=(
+					wgpu.BufferUsage.UNIFORM |
+					wgpu.BufferUsage.COPY_DST
+			)
+		)
+
+		self.device.queue.write_buffer(
+			parameter_buffer,
+			0,
+			parameter_data
+		)
+
+		texture = material.get_texture("albedo")
+
+		if texture is None:
+			texture_view = self.default_texture_view
+			sampler = self.default_sampler
+		else:
+			texture_view = texture.view
+			sampler = texture.sampler
+
+		bind_group = self.device.create_bind_group(
+			layout=self.material_bind_group_layout,
+			entries=[
+				{
+					"binding": 0,
+					"resource": {
+						"buffer": parameter_buffer
+					}
+				},
+				{
+					"binding": 1,
+					"resource": sampler
+				},
+				{
+					"binding": 2,
+					"resource": texture_view
+				}
+			]
+		)
+
+		self.material_resources[material] = {
+			"buffer": parameter_buffer,
+			"bind_group": bind_group
+		}
+
+		material.dirty = False
+
+		return self.material_resources[material]
+
+	def update_material_resources(self, material):
+		resources = self.material_resources[material]
+
+		parameter_data = self.pack_material_parameters(material)
+
+		self.device.queue.write_buffer(
+			resources["buffer"],
+			0,
+			parameter_data
+		)
+
+		texture = material.get_texture("albedo")
+
+		if texture is None:
+			texture_view = self.default_texture_view
+			sampler = self.default_sampler
+		else:
+			texture_view = texture.view
+			sampler = texture.sampler
+
+		resources["bind_group"] = self.device.create_bind_group(
+			layout=self.material_bind_group_layout,
+			entries=[
+				{
+					"binding": 0,
+					"resource": {
+						"buffer": resources["buffer"]
+					},
+				},
+				{
+					"binding": 1,
+					"resource": sampler
+				},
+				{
+					"binding": 2,
+					"resource": texture_view
+				}
+			]
+		)
+
+		material.dirty = False
+
+	def get_material_resources(self, material):
+		resources = self.material_resources.get(material)
+
+		if resources is None:
+			return self.create_material_resources(material)
+
+		if material.dirty:
+			self.update_material_resources(material)
+
+		return resources
+
+	def create_default_texture(self):
+		texture = self.device.create_texture(
+			size=(1, 1, 1),
+			mip_level_count=1,
+			sample_count=1,
+			dimension=wgpu.TextureDimension.d2,
+			format="rgba8unorm",
+			usage=(
+					wgpu.TextureUsage.TEXTURE_BINDING |
+					wgpu.TextureUsage.COPY_DST
+			),
+		)
+
+		self.device.queue.write_texture(
+			{"texture": texture},
+			bytes([255, 255, 255, 255]),
+			{
+				"bytes_per_row": 4,
+				"rows_per_image": 1,
+			},
+			(1, 1, 1),
+		)
+
+		view = texture.create_view(
+			dimension=wgpu.TextureViewDimension.d2
+		)
+
+		sampler = self.device.create_sampler(
+			address_mode_u=wgpu.AddressMode.repeat,
+			address_mode_v=wgpu.AddressMode.repeat,
+			address_mode_w=wgpu.AddressMode.repeat,
+			mag_filter=wgpu.FilterMode.linear,
+			min_filter=wgpu.FilterMode.linear,
+			mipmap_filter=wgpu.MipmapFilterMode.linear,
+		)
+
+		return texture, view, sampler
 
 	# TODO: this is distance culling and not frustum culling
 	def is_entity_visible(self, transform):

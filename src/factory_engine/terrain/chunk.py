@@ -2,7 +2,6 @@
 from pathlib import Path
 
 from factory_engine.ecs.components.c_hex_cell import HexCellComponent
-from factory_engine.ecs.components.c_material import MaterialComponent
 from factory_engine.ecs.components.c_transform import TransformComponent
 from factory_engine.math3d import Vec3
 from factory_engine.rendering.mesh import Mesh
@@ -11,7 +10,7 @@ from factory_engine.terrain.chunk_mesher import ChunkMesher
 
 
 class Chunk:
-	def __init__(self, terrain, chunk_coords, lod=0):
+	def __init__(self, terrain, chunk_coords, terrain_material, lod=0):
 		self.terrain = terrain
 		self.chunk_coords = chunk_coords
 		self.lod = lod
@@ -22,7 +21,7 @@ class Chunk:
 		self.mesher = ChunkMesher()
 		self.mesh = None
 
-		self.material = MaterialComponent(shader=Path(__file__).parents[1] / "shaders" / "mesh.wgsl")
+		self.material = terrain_material
 
 	def generate(self):
 		for x in range(CHUNK_SIZE):

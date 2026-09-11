@@ -1,4 +1,6 @@
 # terrain.py
+from pathlib import Path
+
 from factory_engine.math3d import Vec3
 from factory_engine.terrain.chunk import Chunk
 from .terrain_generator import (
@@ -13,6 +15,9 @@ from .terrain_generator import (
 	TerrainDetailGenerator,
 	FinalHeightGenerator
 )
+from ..rendering.material import Material
+from ..rendering.texture import Texture
+
 
 class Terrain:
 	def __init__(self, seed, device, world):
@@ -25,6 +30,26 @@ class Terrain:
 		self.chunks = {}
 		self.streaming_sources = []  # List of objects to influence e.g. visibility of chunks
 
+		checkerboard = Texture(
+			self.device,
+			Path(__file__).parents[3]
+			/ "assets"
+			/ "textures"
+			/ "uv_checkerboard.png",
+		)
+
+		terrain_material = Material(
+			shader_path=Path(__file__).parent / "shaders" / "terrain.wgsl",
+			parameters={
+				"base_color": (1.0, 1.0, 1.0, 1.0),
+				"metallic": 1.0,
+				"roughness": 0.0
+			},
+			textures={
+				"albedo": checkerboard
+			}
+		)
+
 		# The different generators
 		self.continentality_generator = None
 		self.geology_generator = None
@@ -36,13 +61,15 @@ class Terrain:
 		self.water_generator = None
 		self.terrain_detail_generator = None
 		self.final_height_generator = None
+
 		self.setup_generators()
 
 		for x in range(0, 3):
 			for z in range(0, 3):
 				chunk = Chunk(
 					self,
-					Vec3(x, 0, z)
+					Vec3(x, 0, z),
+					terrain_material
 				)
 				chunk.generate()
 				self.chunks[chunk] = chunk
