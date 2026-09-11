@@ -4,8 +4,14 @@ from factory_engine.math3d import Vec3
 
 # shader=Path(__file__).parent / "shaders" / "mesh.wgsl"
 class MaterialComponent:
-	def __init__(self, color=Vec3(0.8, 0.8, 0.8), shader=None):
+	def __init__(self, material):
 		self.dirty = True
 
-		self.color = color
-		self.shader = shader
+		self.material = material
+
+	def set_material(self, material):
+		self.material = material
+		self.dirty = True
+
+	def get_material(self):
+		return self.material

@@ -169,6 +169,33 @@ class GameApp:
 			]
 		)
 
+		self.material_bind_group_layout = self.device.create_bind_group_layout(
+			entries=[
+				{
+					"binding": 0,
+					"visibility": wgpu.ShaderStage.VERTEX | wgpu.ShaderStage.FRAGMENT,
+					"buffer": {
+						"type": wgpu.BufferBindingType.uniform
+					}
+				},
+				{
+					"binding": 1,
+					"visibility": wgpu.ShaderStage.FRAGMENT,
+					"sampler": {
+						"type": wgpu.SamplerBindingType.filtering
+					}
+				},
+				{
+					"binding": 2,
+					"visibility": wgpu.ShaderStage.FRAGMENT,
+					"texture": {
+						"sample_type": wgpu.TextureSampleType.float,
+						"view_dimension": wgpu.TextureViewDimension.d2
+					}
+				}
+			]
+		)
+
 		self.bind_group = self.device.create_bind_group(
 			layout=self.bind_group_layout,
 			entries=[
@@ -681,7 +708,8 @@ class GameApp:
 
 		pipeline_layout = self.device.create_pipeline_layout(
 			bind_group_layouts=[
-				self.bind_group_layout
+				self.bind_group_layout,
+				self.material_bind_group_layout
 			]
 		)
 
