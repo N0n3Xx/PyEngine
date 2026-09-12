@@ -279,7 +279,7 @@ class GameApp:
 
 		# Generate Terrain
 		self.terrain = Terrain(
-			seed=53,
+			seed=67,
 			device=self.device,
 			world=self.world
 		)

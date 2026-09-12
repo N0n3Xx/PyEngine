@@ -71,13 +71,13 @@ class ChunkMesher:
 
 			if cell_elevation <= neighbor_elevation:
 				if cell_elevation <= next_neighbor_elevation:
-					self.triangulate_corner(v2, cell, v4, neighbor, v5, next_neighbor)
+					self.triangulate_corner(v2, cell, v4, neighbor, v5, next_neighbor, bridge)
 				else:
-					self.triangulate_corner(v5, next_neighbor, v2, cell, v4, neighbor)
+					self.triangulate_corner(v5, next_neighbor, v2, cell, v4, neighbor, bridge)
 			elif neighbor_elevation <= next_neighbor_elevation:
-				self.triangulate_corner(v4, neighbor, v5, next_neighbor, v2, cell)
+				self.triangulate_corner(v4, neighbor, v5, next_neighbor, v2, cell, bridge)
 			else:
-				self.triangulate_corner(v5, next_neighbor, v2, cell, v4, neighbor)
+				self.triangulate_corner(v5, next_neighbor, v2, cell, v4, neighbor, bridge)
 
 	def triangulate_edge_terraces(
 			self,
@@ -179,6 +179,7 @@ class ChunkMesher:
 			bottom, bottom_cell,
 			left, left_cell,
 			right, right_cell,
+			bridge
 	):
 		left_edge_type = bottom_cell.get(HexCellComponent).get_transition_type_from_cell(left_cell)
 		right_edge_type = bottom_cell.get(HexCellComponent).get_transition_type_from_cell(right_cell)
@@ -195,6 +196,8 @@ class ChunkMesher:
 					return  # (1, 1, 1)
 				elif bottom_edge_type == 2:
 					return  # (1, 1, 2)
+				elif bottom_edge_type == 3:
+					return  # (1, 1, 3)
 
 			elif right_edge_type == 2:
 				if bottom_edge_type == 1:
@@ -203,6 +206,17 @@ class ChunkMesher:
 				elif bottom_edge_type == 2:
 					self.triangulate_corner_terraces(right, right_cell, bottom, bottom_cell, left, left_cell)
 					return  # (1, 2, 2)
+				elif bottom_edge_type == 3:
+					return  # (1, 2, 3)
+
+			elif right_edge_type == 3:
+				if bottom_edge_type == 1:
+					return  # (1, 3, 1)
+				elif bottom_edge_type == 2:
+					return  # (1, 3, 2)
+				elif bottom_edge_type == 3:
+					# self.triangulate_corner_terraces_cliff(bottom, bottom_cell, left, left_cell, right, right_cell)
+					return  # (1, 3, 3)
 
 		elif left_edge_type == 2:
 			if right_edge_type == 1:
@@ -212,6 +226,8 @@ class ChunkMesher:
 				elif bottom_edge_type == 2:
 					self.triangulate_corner_terraces(left, left_cell, right, right_cell, bottom, bottom_cell)
 					return  # (2, 1, 2)
+				elif bottom_edge_type == 3:
+					return  # (2, 1, 3)
 
 			elif right_edge_type == 2:
 				if bottom_edge_type == 1:
@@ -219,6 +235,196 @@ class ChunkMesher:
 					return  # (2, 2, 1)
 				elif bottom_edge_type == 2:
 					return  # (2, 2, 2)
+				elif bottom_edge_type == 3:
+					return  # (2, 2, 3)
+
+			elif right_edge_type == 3:
+				if bottom_edge_type == 1:
+					return  # (2, 3, 1)
+				elif bottom_edge_type == 2:
+					return  # (2, 3, 2)
+				elif bottom_edge_type == 3:
+					self.triangulate_corner_terraces_cliff(bottom, bottom_cell, left, left_cell, right, right_cell,
+														   False)
+					return  # (2, 3, 3)
+
+		elif left_edge_type == 3:
+			if right_edge_type == 1:
+				if bottom_edge_type == 1:
+					return  # (3, 1, 1)
+				elif bottom_edge_type == 2:
+					return  # (3, 1, 2)
+				elif bottom_edge_type == 3:
+					return  # (3, 1, 3)
+
+			elif right_edge_type == 2:
+				if bottom_edge_type == 1:
+					return  # (3, 2, 1)
+				elif bottom_edge_type == 2:
+					return  # (3, 2, 2)
+				elif bottom_edge_type == 3:
+					self.triangulate_corner_terraces_cliff(bottom, bottom_cell, right, right_cell, left, left_cell,
+														   True)
+					return  # (3, 2, 3)
+
+			elif right_edge_type == 3:
+				if bottom_edge_type == 1:
+					return  # (3, 3, 1)
+				elif bottom_edge_type == 2:
+					self.triangulate_corner_terraces_cliff(left, left_cell, right, right_cell, bottom, bottom_cell,
+														   False)
+					return  # (3, 3, 2)
+				elif bottom_edge_type == 3:
+					return  # (3, 3, 3)
+
+	def triangulate_corner_terraces_cliff(
+			self,
+			begin, begin_cell,
+			left, left_cell,
+			right, right_cell,
+			rewind
+	):
+		begin_elevation = begin_cell.get(TransformComponent).position.y
+		right_elevation = right_cell.get(TransformComponent).position.y
+		left_elevation = left_cell.get(TransformComponent).position.y
+
+		terraces_per_slope, terrace_steps = get_terrace_steps(
+			begin_elevation,
+			left_elevation
+		)
+
+		cliff_height = max(begin_elevation, right_elevation) - CLIFF_SLOPE_HEIGHT
+
+		cliff_point = begin + (right - begin) * 0.5
+		cliff_point.y = cliff_height
+
+		previous = begin
+
+		# First two steps collapse into cliff point
+		for step in range(1, 3):
+			current = terrace_lerp(
+				begin,
+				left,
+				step,
+				terrace_steps,
+				terraces_per_slope
+			)
+
+			if rewind:
+				self.add_triangle(
+					current,
+					previous,
+					cliff_point,
+				)
+			else:
+				self.add_triangle(
+					cliff_point,
+					previous,
+					current
+				)
+			previous = current
+
+		# Remaining terrace steps extend and collapse dynamically
+		cliff_previous = cliff_point
+
+		for step in range(3, terrace_steps + 1):
+			current = terrace_lerp(
+				begin,
+				left,
+				step,
+				terrace_steps,
+				terraces_per_slope
+			)
+
+			if step % 2 == 1:
+				# Vertical terrace step:
+				# Extend quad
+				cliff_current = cliff_previous.copy()
+				cliff_current.y = current.y
+
+				if rewind:
+					self.add_quad(
+						previous,
+						current,
+						cliff_previous,
+						cliff_current
+					)
+				else:
+					self.add_quad(
+						current,
+						previous,
+						cliff_current,
+						cliff_previous
+					)
+
+				cliff_previous = cliff_current
+			else:
+				# Horizontal terrace step
+				# Collapse flat top into cliff point
+				if rewind:
+					self.add_triangle(
+						cliff_previous,
+						current,
+						previous
+					)
+				else:
+					self.add_triangle(
+						cliff_previous,
+						previous,
+						current
+					)
+
+			previous = current
+
+		cliff_point_left = left + (right - left) * 0.5
+		cliff_point_left.y = left_elevation + CLIFF_SLOPE_HEIGHT
+
+		if rewind:
+			self.add_triangle(
+				cliff_point_left,
+				previous,
+				cliff_previous
+			)
+		else:
+			self.add_triangle(
+				cliff_point_left,
+				cliff_previous,
+				previous
+			)
+
+		previous = cliff_point_left.copy()
+
+		cliff_point_right = cliff_previous.copy()
+		cliff_point_right.y = right_elevation - CLIFF_SLOPE_HEIGHT
+
+		cliff_point_left.y = right_elevation - CLIFF_SLOPE_HEIGHT
+
+		if rewind:
+			self.add_quad(
+				cliff_previous,
+				previous,
+				cliff_point_right,
+				cliff_point_left
+			)
+
+			self.add_triangle(
+				cliff_point_left,
+				cliff_point_right,
+				right
+			)
+		else:
+			self.add_quad(
+				previous,
+				cliff_previous,
+				cliff_point_left,
+				cliff_point_right
+			)
+
+			self.add_triangle(
+				cliff_point_left,
+				right,
+				cliff_point_right
+			)
 
 	def triangulate_corner_terrace_slopes(
 			self,
@@ -258,8 +464,6 @@ class ChunkMesher:
 
 		left_terraces_per_slope, left_terrace_steps = get_terrace_steps(begin_elevation, left_elevation)
 		right_terraces_per_slope, right_terrace_steps = get_terrace_steps(begin_elevation, right_elevation)
-
-		print(f"Left Steps: {left_terrace_steps} / Right Steps: {right_terrace_steps}")
 
 		# First step
 		left_step = 1
