@@ -64,7 +64,20 @@ class ChunkMesher:
 		if direction <= 1 and next_neighbor is not None:
 			v5 = v2 + get_bridge(HexCellComponent.next_dir(direction))
 			v5.y = next_neighbor.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
-			self.add_triangle(v2, v4, v5)
+
+			cell_elevation = cell.get(HexCellComponent).elevation
+			neighbor_elevation = neighbor.get(HexCellComponent).elevation
+			next_neighbor_elevation = next_neighbor.get(HexCellComponent).elevation
+
+			if cell_elevation <= neighbor_elevation:
+				if cell_elevation <= next_neighbor_elevation:
+					self.triangulate_corner(v2, cell, v4, neighbor, v5, next_neighbor)
+				else:
+					self.triangulate_corner(v5, next_neighbor, v2, cell, v4, neighbor)
+			elif neighbor_elevation <= next_neighbor_elevation:
+				self.triangulate_corner(v4, neighbor, v5, next_neighbor, v2, cell)
+			else:
+				self.triangulate_corner(v5, next_neighbor, v2, cell, v4, neighbor)
 
 	def triangulate_edge_terraces(
 			self,
@@ -126,6 +139,141 @@ class ChunkMesher:
 		end_right.y = neighbor_y
 
 		self.add_quad(bottom_slope_left, bottom_slope_right, end_left, end_right)
+
+	def triangulate_corner(
+			self,
+			bottom, bottom_cell,
+			left, left_cell,
+			right, right_cell,
+	):
+		left_edge_type = bottom_cell.get(HexCellComponent).get_transition_type_from_cell(left_cell)
+		right_edge_type = bottom_cell.get(HexCellComponent).get_transition_type_from_cell(right_cell)
+		bottom_edge_type = left_cell.get(HexCellComponent).get_transition_type_from_cell(right_cell)
+
+		# 0: Flat !Not Used
+		# 1: Slope !Used instead of flat
+		# 2: Terrace
+		# 3: Cliff
+		if left_edge_type == 1:
+			if right_edge_type == 1:
+				if bottom_edge_type == 1:
+					self.add_triangle(bottom, left, right)
+					return  # (1, 1, 1)
+				elif bottom_edge_type == 2:
+					return  # (1, 1, 2)
+
+			elif right_edge_type == 2:
+				if bottom_edge_type == 1:
+					self.triangulate_corner_terrace_slopes(right, right_cell, bottom, bottom_cell, left, left_cell)
+					return  # (1, 2, 1)
+				elif bottom_edge_type == 2:
+					self.triangulate_corner_terraces(right, right_cell, bottom, bottom_cell, left, left_cell)
+					return  # (1, 2, 2)
+
+		elif left_edge_type == 2:
+			if right_edge_type == 1:
+				if bottom_edge_type == 1:
+					self.triangulate_corner_terrace_slopes(bottom, bottom_cell, left, left_cell, right, right_cell)
+					return  # (2, 1, 1)
+				elif bottom_edge_type == 2:
+					self.triangulate_corner_terraces(left, left_cell, right, right_cell, bottom, bottom_cell)
+					return  # (2, 1, 2)
+
+			elif right_edge_type == 2:
+				if bottom_edge_type == 1:
+					self.triangulate_corner_terraces(bottom, bottom_cell, left, left_cell, right, right_cell)
+					return  # (2, 2, 1)
+				elif bottom_edge_type == 2:
+					return  # (2, 2, 2)
+
+	def triangulate_corner_terrace_slopes(
+			self,
+			begin, begin_cell,
+			left, left_cell,
+			right, right_cell
+	):
+		begin_elevation = begin_cell.get(TransformComponent).position.y
+		left_elevation = left_cell.get(TransformComponent).position.y
+
+		terraces_per_slope, terrace_steps = get_terrace_steps(begin_elevation, left_elevation)
+
+		previous = begin
+
+		for step in range(1, terrace_steps + 1):
+			current = terrace_lerp(
+				begin,
+				left,
+				step,
+				terrace_steps,
+				terraces_per_slope
+			)
+
+			self.add_triangle(right, previous, current)
+
+			previous = current
+
+	def triangulate_corner_terraces(
+			self,
+			begin, begin_cell,
+			left, left_cell,
+			right, right_cell
+	):
+		begin_elevation = begin_cell.get(TransformComponent).position.y
+		left_elevation = left_cell.get(TransformComponent).position.y
+		right_elevation = right_cell.get(TransformComponent).position.y
+
+		left_terraces_per_slope, left_terrace_steps = get_terrace_steps(begin_elevation, left_elevation)
+		right_terraces_per_slope, right_terrace_steps = get_terrace_steps(begin_elevation, right_elevation)
+
+		print(f"Left Steps: {left_terrace_steps} / Right Steps: {right_terrace_steps}")
+
+		# First step
+		left_step = 1
+		right_step = 1
+
+		v_left = terrace_lerp(
+			begin,
+			left,
+			left_step,
+			left_terrace_steps,
+			left_terraces_per_slope,
+		)
+
+		v_right = terrace_lerp(
+			begin,
+			right,
+			right_step,
+			right_terrace_steps,
+			right_terraces_per_slope,
+		)
+
+		self.add_triangle(begin, v_left, v_right)
+
+		# Remaining steps
+		while left_step < left_terrace_steps or right_step < right_terrace_steps:
+			previous_left, previous_right = v_left, v_right
+
+			left_can_advance = left_step < left_terrace_steps
+			right_can_advance = right_step < right_terrace_steps
+
+			if left_can_advance:
+				left_step += 1
+				v_left = terrace_lerp(
+					begin, left, left_step, left_terrace_steps, left_terraces_per_slope
+				)
+
+			if right_can_advance:
+				right_step += 1
+				v_right = terrace_lerp(
+					begin, right, right_step, right_terrace_steps, right_terraces_per_slope
+				)
+
+			if left_can_advance and right_can_advance:
+				self.add_quad(previous_left, previous_right, v_left, v_right)
+			elif left_can_advance:
+				self.add_triangle(previous_left, v_left, previous_right)
+			elif right_can_advance:
+				self.add_triangle(previous_left, v_right, previous_right)
 
 	def add_triangle(self, v1, v2, v3):
 		normal = (v3 - v1).cross(v2 - v1).normalize()

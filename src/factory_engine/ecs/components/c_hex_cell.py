@@ -26,6 +26,11 @@ class HexCellComponent:
 		other_height = self.neighbors[direction].get(TransformComponent).get_position().y
 		return get_transition_type(height, other_height)
 
+	def get_transition_type_from_cell(self, other):
+		height = self.entity.get(TransformComponent).get_position().y
+		other_height = other.get(TransformComponent).get_position().y
+		return get_transition_type(height, other_height)
+
 	@staticmethod
 	def opposite(direction):
 		if direction < 3:

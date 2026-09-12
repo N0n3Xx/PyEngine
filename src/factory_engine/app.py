@@ -279,7 +279,7 @@ class GameApp:
 
 		# Generate Terrain
 		self.terrain = Terrain(
-			seed=34234,
+			seed=53,
 			device=self.device,
 			world=self.world
 		)
@@ -816,6 +816,7 @@ class GameApp:
 			},
 			primitive={
 				"topology": "triangle-list",
+				#"polygon_mode": "line",
 				"cull_mode": "back"
 			},
 			depth_stencil={
