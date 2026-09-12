@@ -25,14 +25,15 @@ HEX_SOLID_FACTOR = 0.75
 HEX_BLEND_FACTOR = 1.0 - HEX_SOLID_FACTOR
 CHUNK_SIZE = 12
 
-ELEVATION_MULTIPLIER = 100.0
+ELEVATION_MULTIPLIER = 20.0
 
 ## Transitions
-TR_SLOPED = 0.4
+TR_SLOPED = 0.3
 TR_TERRACED = 0.75
 TR_CLIFF = 10.0  # Makes no sense, maybe for future variants of each transition
 
 MIN_STEP_HEIGHT = 0.2
+CLIFF_SLOPE_HEIGHT = 0.1
 
 HEX_CORNERS = (
 	Vec3(0.0, 0.0, -HEX_OUTER_RADIUS),
@@ -113,7 +114,7 @@ def get_transition_type(elevation1, elevation2):
 	_elevation2 = elevation2 * ELEVATION_MULTIPLIER
 
 	delta = abs(elevation2 - elevation1)
-	print(delta)
+
 	if delta < TR_SLOPED:
 		return 1
 	elif delta < TR_TERRACED:

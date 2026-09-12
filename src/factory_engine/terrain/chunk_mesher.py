@@ -2,7 +2,7 @@
 from factory_engine.ecs.components.c_hex_cell import HexCellComponent
 from factory_engine.ecs.components.c_transform import TransformComponent
 from factory_engine.settings import HEX_CORNERS, get_first_corner, get_second_corner, get_first_solid_corner, \
-	get_second_solid_corner, get_bridge, ELEVATION_MULTIPLIER, terrace_lerp, get_terrace_steps
+	get_second_solid_corner, get_bridge, ELEVATION_MULTIPLIER, terrace_lerp, get_terrace_steps, CLIFF_SLOPE_HEIGHT
 
 
 class ChunkMesher:
@@ -53,10 +53,12 @@ class ChunkMesher:
 		v3.y = neighbor.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
 		v4.y = neighbor.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
 
-		if cell.get(HexCellComponent).get_transition_type(direction) == 2:  # TERRACED
+		if cell.get(HexCellComponent).get_transition_type(direction) == 1:  # SLOPED (AND FLAT)
+			self.add_quad(v1, v2, v3, v4)
+		elif cell.get(HexCellComponent).get_transition_type(direction) == 2:  # TERRACED
 			self.triangulate_edge_terraces(v1, v2, cell, v3, v4, neighbor)
-
-		# self.add_quad(v1, v2, v3, v4)
+		elif cell.get(HexCellComponent).get_transition_type(direction) == 3:  # CLIFF
+			self.triangulate_cliff(v1, v2, bridge, cell, neighbor)
 
 		next_neighbor = cell.get(HexCellComponent).get_neighbor(HexCellComponent.next_dir(direction))
 		if direction <= 1 and next_neighbor is not None:
@@ -93,6 +95,37 @@ class ChunkMesher:
 			self.add_quad(v1, v2, v3, v4)
 
 		self.add_quad(v3, v4, end_left, end_right)
+
+	def triangulate_cliff(
+			self,
+			begin_left,
+			begin_right,
+			bridge,
+			cell,
+			neighbor
+	):
+		top_slope_left = begin_left + (bridge * 0.5)
+		top_slope_right = begin_right + (bridge * 0.5)
+		top_slope_left.y = begin_left.y - CLIFF_SLOPE_HEIGHT
+		top_slope_right.y = begin_right.y - CLIFF_SLOPE_HEIGHT
+
+		self.add_quad(begin_left, begin_right, top_slope_left, top_slope_right)
+
+		neighbor_y = neighbor.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
+
+		bottom_slope_left = begin_left + (bridge * 0.5)
+		bottom_slope_right = begin_right + (bridge * 0.5)
+		bottom_slope_left.y = neighbor_y + CLIFF_SLOPE_HEIGHT
+		bottom_slope_right.y = neighbor_y + CLIFF_SLOPE_HEIGHT
+
+		self.add_quad(top_slope_left, top_slope_right, bottom_slope_left, bottom_slope_right)
+
+		end_left = begin_left + bridge
+		end_right = begin_right + bridge
+		end_left.y = neighbor_y
+		end_right.y = neighbor_y
+
+		self.add_quad(bottom_slope_left, bottom_slope_right, end_left, end_right)
 
 	def add_triangle(self, v1, v2, v3):
 		normal = (v3 - v1).cross(v2 - v1).normalize()
