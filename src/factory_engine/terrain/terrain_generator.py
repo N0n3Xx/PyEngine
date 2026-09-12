@@ -22,7 +22,7 @@ class ContinentalityGenerator:
 
 		self.noise = NoiseGenerator(
 			seed=seed,
-			scale=0.001,
+			scale=0.01,
 			octaves=4,
 			persistence=0.5,
 			lacunarity=2.0,
@@ -38,7 +38,7 @@ class GeologyGenerator:
 
 		self.noise = NoiseGenerator(
 			seed=seed,
-			scale=0.003,
+			scale=0.03,
 			octaves=4,
 			persistence=0.5,
 			lacunarity=2.0,
@@ -176,7 +176,7 @@ class TerrainDetailGenerator:
 
 		self.noise = NoiseGenerator(
 			seed=seed,
-			scale=0.03,
+			scale=0.3,
 			octaves=3,
 			persistence=0.5,
 			lacunarity=2.0

@@ -87,6 +87,9 @@ class Vec3:
 	def __repr__(self):
 		return f"Vec3({self.x}, {self.y}, {self.z})"
 
+	def copy(self):
+		return Vec3(self.x, self.y, self.z)
+
 
 class Mat4:
 	def __init__(self, values=None):

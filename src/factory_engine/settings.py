@@ -25,10 +25,17 @@ HEX_SOLID_FACTOR = 0.75
 HEX_BLEND_FACTOR = 1.0 - HEX_SOLID_FACTOR
 CHUNK_SIZE = 12
 
+ELEVATION_MULTIPLIER = 30.0
+
 ## Transitions
 TR_SLOPED = 0.23
 TR_TERRACED = 0.75
 TR_CLIFF = 10  # Makes no sense, maybe for future variants of each transition
+
+TERRACES_PER_SLOPE = 2
+TERRACE_STEPS = TERRACES_PER_SLOPE * 2 + 1
+HOR_TERRACE_STEP_SIZE = 1.0 / TERRACE_STEPS
+VERT_TERRACE_STEP_SIZE = 1.0 / (TERRACES_PER_SLOPE + 1)
 
 HEX_CORNERS = (
 	Vec3(0.0, 0.0, -HEX_OUTER_RADIUS),
@@ -51,7 +58,6 @@ CHUNK_NEIGHBOR_OFFSETS = {
 	7: (-1, -1),
 }
 
-
 def get_first_corner(direction):
 	return HEX_CORNERS[direction]
 
@@ -70,3 +76,16 @@ def get_second_solid_corner(direction):
 
 def get_bridge(direction):
 	return (HEX_CORNERS[direction] + HEX_CORNERS[direction + 1]) * HEX_BLEND_FACTOR
+
+def terrace_lerp(a, b, step):
+	a = a.copy()
+	b = b.copy()
+	_step = step
+
+	h = _step * HOR_TERRACE_STEP_SIZE
+	a.x += (b.x - a.x) * h
+	a.z += (b.z - a.z) * h
+
+	v = ((_step + 1) // 2) * VERT_TERRACE_STEP_SIZE
+	a.y += (b.y - a.y) * v
+	return a

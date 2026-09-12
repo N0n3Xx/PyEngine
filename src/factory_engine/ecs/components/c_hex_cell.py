@@ -10,10 +10,11 @@ from factory_engine.ecs.entity import Entity
 # R axis direction: ––
 # S axis direction:  \
 class HexCellComponent:
-	def __init__(self, coordinates):
+	def __init__(self, coordinates, elevation):
 		self.entity: Entity | None = None
 		self.coordinates = coordinates
 		self.neighbors = [None] * 6
+		self.elevation = elevation
 
 	def get_neighbor(self, direction):
 		return self.neighbors[direction]

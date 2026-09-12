@@ -2,7 +2,7 @@
 from factory_engine.ecs.components.c_hex_cell import HexCellComponent
 from factory_engine.ecs.components.c_transform import TransformComponent
 from factory_engine.settings import HEX_CORNERS, get_first_corner, get_second_corner, get_first_solid_corner, \
-	get_second_solid_corner, get_bridge
+	get_second_solid_corner, get_bridge, ELEVATION_MULTIPLIER, terrace_lerp, TERRACE_STEPS
 
 
 class ChunkMesher:
@@ -49,11 +49,43 @@ class ChunkMesher:
 		v3 = v1 + bridge
 		v4 = v2 + bridge
 
-		self.add_quad(v1, v2, v3, v4)
+		# Slopes
+		v3.y = neighbor.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
+		v4.y = neighbor.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
+
+		self.triangulate_edge_terraces(v1, v2, cell, v3, v4, neighbor)
+
+		# self.add_quad(v1, v2, v3, v4)
 
 		next_neighbor = cell.get(HexCellComponent).get_neighbor(HexCellComponent.next_dir(direction))
 		if direction <= 1 and next_neighbor is not None:
-			self.add_triangle(v2, v4, v2 + get_bridge(HexCellComponent.next_dir(direction)))
+			v5 = v2 + get_bridge(HexCellComponent.next_dir(direction))
+			v5.y = next_neighbor.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
+			self.add_triangle(v2, v4, v5)
+
+	def triangulate_edge_terraces(
+			self,
+			begin_left,
+			begin_right,
+			begin_cell,
+			end_left,
+			end_right,
+			end_cell,
+	):
+		v3 = terrace_lerp(begin_left, end_left, 1)
+		v4 = terrace_lerp(begin_right, end_right, 1)
+		self.add_quad(begin_left, begin_right, v3, v4)
+
+		for i in range(2, TERRACE_STEPS):
+			v1 = v3
+			v2 = v4
+
+			v3 = terrace_lerp(begin_left, end_left, i)
+			v4 = terrace_lerp(begin_right, end_right, i)
+
+			self.add_quad(v1, v2, v3, v4)
+
+		self.add_quad(v3, v4, end_left, end_right)
 
 	def add_triangle(self, v1, v2, v3):
 		normal = (v3 - v1).cross(v2 - v1).normalize()

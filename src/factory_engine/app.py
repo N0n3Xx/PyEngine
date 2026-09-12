@@ -109,7 +109,7 @@ class GameApp:
 		)
 
 		# Upload light data
-		light_direction = Vec3(-1.0, 2.0, -1.0).normalize()
+		light_direction = Vec3(-0.5, 5.0, 1.0).normalize()
 		self.device.queue.write_buffer(
 			self.light_buffer,
 			0,
@@ -279,7 +279,7 @@ class GameApp:
 
 		# Generate Terrain
 		self.terrain = Terrain(
-			seed=1234,
+			seed=34234,
 			device=self.device,
 			world=self.world
 		)
