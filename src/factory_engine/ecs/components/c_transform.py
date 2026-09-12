@@ -1,6 +1,7 @@
 # c_transform.py
 import math
 
+from factory_engine.ecs.entity import Entity
 from factory_engine.math3d import Vec3
 
 
@@ -11,6 +12,7 @@ class TransformComponent:
 			rotation=None,
 			scale=None,
 	):
+		self.entity: Entity | None = None
 		self.dirty = True
 
 		self.position = position or Vec3(0, 0, 0)

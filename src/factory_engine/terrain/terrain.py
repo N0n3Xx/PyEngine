@@ -1,5 +1,6 @@
 # terrain.py
 from pathlib import Path
+from webbrowser import register
 
 from factory_engine.math3d import Vec3
 from factory_engine.terrain.chunk import Chunk
@@ -17,6 +18,7 @@ from .terrain_generator import (
 )
 from ..rendering.material import Material
 from ..rendering.texture import Texture
+from ..settings import VIEW_DISTANCE, CHUNK_NEIGHBOR_OFFSETS
 
 
 class Terrain:
@@ -26,8 +28,8 @@ class Terrain:
 		self.device = device
 		self.world = world
 
-		self.render_distance = 400.0
-		self.chunks = {}
+		self.render_distance = VIEW_DISTANCE
+		self.chunks: dict[tuple[int, int], Chunk] = {}
 		self.streaming_sources = []  # List of objects to influence e.g. visibility of chunks
 
 		checkerboard = Texture(
@@ -42,8 +44,8 @@ class Terrain:
 			shader_path=Path(__file__).parent / "shaders" / "terrain.wgsl",
 			parameters={
 				"base_color": (1.0, 1.0, 1.0, 1.0),
-				"metallic": 1.0,
-				"roughness": 0.0
+				"metallic": 0.0,
+				"roughness": 1.0
 			},
 			textures={
 				"albedo": checkerboard
@@ -64,16 +66,30 @@ class Terrain:
 
 		self.setup_generators()
 
-		for x in range(0, 3):
-			for z in range(0, 3):
+		for z in range(0, 3):
+			for x in range(0, 3):
 				chunk = Chunk(
 					self,
 					Vec3(x, 0, z),
 					terrain_material
 				)
 				chunk.generate()
-				self.chunks[chunk] = chunk
+
+				self.register_chunk(chunk)
+
 				chunk.mesh_chunk()
+
+	def register_chunk(self, chunk):
+		x = int(chunk.chunk_coords.x)
+		z = int(chunk.chunk_coords.z)
+
+		self.chunks[(x, z)] = chunk
+
+		for direction, (dx, dz) in CHUNK_NEIGHBOR_OFFSETS.items():
+			neighbor = self.chunks.get((x + dx, z + dz))
+
+			if neighbor is not None:
+				chunk.set_neighbor(direction, neighbor)
 
 	def setup_generators(self):
 		self.continentality_generator = ContinentalityGenerator(self.seed)
