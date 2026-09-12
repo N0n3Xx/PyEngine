@@ -1,9 +1,7 @@
 # c_hex_cell.py
 from factory_engine.ecs.components.c_transform import TransformComponent
 from factory_engine.ecs.entity import Entity
-
-
-
+from factory_engine.settings import get_transition_type
 
 
 # Q axis direction:  /
@@ -22,6 +20,11 @@ class HexCellComponent:
 	def set_neighbor(self, direction, neighbor):
 		self.neighbors[direction] = neighbor
 		neighbor.get(HexCellComponent).neighbors[HexCellComponent.opposite(direction)] = self.entity
+
+	def get_transition_type(self, direction):
+		height = self.entity.get(TransformComponent).get_position().y
+		other_height = self.neighbors[direction].get(TransformComponent).get_position().y
+		return get_transition_type(height, other_height)
 
 	@staticmethod
 	def opposite(direction):

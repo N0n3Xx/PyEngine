@@ -2,7 +2,7 @@
 from factory_engine.ecs.components.c_hex_cell import HexCellComponent
 from factory_engine.ecs.components.c_transform import TransformComponent
 from factory_engine.settings import HEX_CORNERS, get_first_corner, get_second_corner, get_first_solid_corner, \
-	get_second_solid_corner, get_bridge, ELEVATION_MULTIPLIER, terrace_lerp, TERRACE_STEPS
+	get_second_solid_corner, get_bridge, ELEVATION_MULTIPLIER, terrace_lerp, get_terrace_steps
 
 
 class ChunkMesher:
@@ -53,7 +53,8 @@ class ChunkMesher:
 		v3.y = neighbor.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
 		v4.y = neighbor.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
 
-		self.triangulate_edge_terraces(v1, v2, cell, v3, v4, neighbor)
+		if cell.get(HexCellComponent).get_transition_type(direction) == 2:  # TERRACED
+			self.triangulate_edge_terraces(v1, v2, cell, v3, v4, neighbor)
 
 		# self.add_quad(v1, v2, v3, v4)
 
@@ -72,16 +73,22 @@ class ChunkMesher:
 			end_right,
 			end_cell,
 	):
-		v3 = terrace_lerp(begin_left, end_left, 1)
-		v4 = terrace_lerp(begin_right, end_right, 1)
+		elevation1 = begin_cell.get(TransformComponent).position.y
+		elevation2 = end_cell.get(TransformComponent).position.y
+
+		terraces_per_slope = get_terrace_steps(elevation1, elevation2)[0]
+		terrace_steps = get_terrace_steps(elevation1, elevation2)[1]
+
+		v3 = terrace_lerp(begin_left, end_left, 1, terrace_steps, terraces_per_slope)
+		v4 = terrace_lerp(begin_right, end_right, 1, terrace_steps, terraces_per_slope)
 		self.add_quad(begin_left, begin_right, v3, v4)
 
-		for i in range(2, TERRACE_STEPS):
+		for i in range(2, terrace_steps):
 			v1 = v3
 			v2 = v4
 
-			v3 = terrace_lerp(begin_left, end_left, i)
-			v4 = terrace_lerp(begin_right, end_right, i)
+			v3 = terrace_lerp(begin_left, end_left, i, terrace_steps, terraces_per_slope)
+			v4 = terrace_lerp(begin_right, end_right, i, terrace_steps, terraces_per_slope)
 
 			self.add_quad(v1, v2, v3, v4)
 

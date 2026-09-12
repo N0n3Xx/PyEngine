@@ -25,17 +25,14 @@ HEX_SOLID_FACTOR = 0.75
 HEX_BLEND_FACTOR = 1.0 - HEX_SOLID_FACTOR
 CHUNK_SIZE = 12
 
-ELEVATION_MULTIPLIER = 30.0
+ELEVATION_MULTIPLIER = 100.0
 
 ## Transitions
-TR_SLOPED = 0.23
+TR_SLOPED = 0.4
 TR_TERRACED = 0.75
-TR_CLIFF = 10  # Makes no sense, maybe for future variants of each transition
+TR_CLIFF = 10.0  # Makes no sense, maybe for future variants of each transition
 
-TERRACES_PER_SLOPE = 2
-TERRACE_STEPS = TERRACES_PER_SLOPE * 2 + 1
-HOR_TERRACE_STEP_SIZE = 1.0 / TERRACE_STEPS
-VERT_TERRACE_STEP_SIZE = 1.0 / (TERRACES_PER_SLOPE + 1)
+MIN_STEP_HEIGHT = 0.2
 
 HEX_CORNERS = (
 	Vec3(0.0, 0.0, -HEX_OUTER_RADIUS),
@@ -58,6 +55,7 @@ CHUNK_NEIGHBOR_OFFSETS = {
 	7: (-1, -1),
 }
 
+
 def get_first_corner(direction):
 	return HEX_CORNERS[direction]
 
@@ -77,15 +75,48 @@ def get_second_solid_corner(direction):
 def get_bridge(direction):
 	return (HEX_CORNERS[direction] + HEX_CORNERS[direction + 1]) * HEX_BLEND_FACTOR
 
-def terrace_lerp(a, b, step):
+
+def get_terrace_steps(elevation1, elevation2):
+	delta = abs(elevation2 - elevation1)
+
+	terraces_per_slope = max(
+		1,
+		round(delta / MIN_STEP_HEIGHT)
+	)
+
+	terrace_steps = terraces_per_slope * 2 + 1
+
+	return terraces_per_slope, terrace_steps
+
+
+def terrace_lerp(a, b, step, terrace_steps, terraces_per_slope):
 	a = a.copy()
 	b = b.copy()
 	_step = step
 
-	h = _step * HOR_TERRACE_STEP_SIZE
+	hor_step_size = 1.0 / terrace_steps
+	vert_step_size = 1.0 / (terraces_per_slope + 1)
+
+	h = _step * hor_step_size
 	a.x += (b.x - a.x) * h
 	a.z += (b.z - a.z) * h
 
-	v = ((_step + 1) // 2) * VERT_TERRACE_STEP_SIZE
+	v = ((_step + 1) // 2) * vert_step_size
 	a.y += (b.y - a.y) * v
 	return a
+
+
+def get_transition_type(elevation1, elevation2):
+	# if elevation1 == elevation2:
+	#	return 0  # Flat
+	_elevation1 = elevation1 * ELEVATION_MULTIPLIER
+	_elevation2 = elevation2 * ELEVATION_MULTIPLIER
+
+	delta = abs(elevation2 - elevation1)
+	print(delta)
+	if delta < TR_SLOPED:
+		return 1
+	elif delta < TR_TERRACED:
+		return 2
+	else:  # delta > TR_CLIFF:
+		return 3
