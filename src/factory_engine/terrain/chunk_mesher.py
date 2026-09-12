@@ -117,28 +117,62 @@ class ChunkMesher:
 			cell,
 			neighbor
 	):
-		top_slope_left = begin_left + (bridge * 0.5)
-		top_slope_right = begin_right + (bridge * 0.5)
-		top_slope_left.y = begin_left.y - CLIFF_SLOPE_HEIGHT
-		top_slope_right.y = begin_right.y - CLIFF_SLOPE_HEIGHT
-
-		self.add_quad(begin_left, begin_right, top_slope_left, top_slope_right)
-
+		cell_y = cell.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
 		neighbor_y = neighbor.get(HexCellComponent).elevation * ELEVATION_MULTIPLIER
 
-		bottom_slope_left = begin_left + (bridge * 0.5)
-		bottom_slope_right = begin_right + (bridge * 0.5)
-		bottom_slope_left.y = neighbor_y + CLIFF_SLOPE_HEIGHT
-		bottom_slope_right.y = neighbor_y + CLIFF_SLOPE_HEIGHT
+		if cell_y >= neighbor_y:
+			high_left = begin_left
+			high_right = begin_right
+			low_left = begin_left + bridge
+			low_right = begin_right + bridge
 
-		self.add_quad(top_slope_left, top_slope_right, bottom_slope_left, bottom_slope_right)
+			high_y = cell_y
+			low_y = neighbor_y
+		else:
+			high_left = begin_left + bridge
+			high_right = begin_right + bridge
+			low_left = begin_left
+			low_right = begin_right
 
-		end_left = begin_left + bridge
-		end_right = begin_right + bridge
-		end_left.y = neighbor_y
-		end_right.y = neighbor_y
+			high_y = neighbor_y
+			low_y = cell_y
 
-		self.add_quad(bottom_slope_left, bottom_slope_right, end_left, end_right)
+		low_left.y = low_y
+		low_right.y = low_y
+		high_left.y = high_y
+		high_right.y = high_y
+
+		top_slope_left = high_left + (bridge * 0.5 if cell_y >= neighbor_y else bridge * -0.5)
+		top_slope_right = high_right + (bridge * 0.5 if cell_y >= neighbor_y else bridge * -0.5)
+
+		top_slope_left.y = high_y - CLIFF_SLOPE_HEIGHT
+		top_slope_right.y = high_y - CLIFF_SLOPE_HEIGHT
+
+		bottom_slope_left = top_slope_left.copy()
+		bottom_slope_right = top_slope_right.copy()
+
+		bottom_slope_left.y = low_y + CLIFF_SLOPE_HEIGHT
+		bottom_slope_right.y = low_y + CLIFF_SLOPE_HEIGHT
+
+		reverse_winding = cell_y < neighbor_y
+
+		# Top slope
+		if reverse_winding:
+			self.add_quad(high_right, high_left, top_slope_right, top_slope_left)
+		else:
+			self.add_quad(high_left, high_right, top_slope_left, top_slope_right)
+
+		# Vertical cliff
+		if reverse_winding:
+			self.add_quad(top_slope_right, top_slope_left, bottom_slope_right, bottom_slope_left)
+		else:
+			self.add_quad(top_slope_left, top_slope_right, bottom_slope_left, bottom_slope_right)
+
+		# Bottom slope
+		if reverse_winding:
+			self.add_quad(bottom_slope_right, bottom_slope_left, low_right, low_left)
+		else:
+			self.add_quad(bottom_slope_left, bottom_slope_right, low_left, low_right)
 
 	def triangulate_corner(
 			self,
